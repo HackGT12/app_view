@@ -43,3 +43,8 @@ Thumbs.db
 
 expo-env.d.ts
 # @end expo-cli
+
+# Ignore package files and babel config (prevent accidental commits of lockfile and config changes)
+package-lock.json
+package.json
+babel.config.js
