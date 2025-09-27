@@ -17,6 +17,42 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// Type definitions
+interface LightningPath {
+  id: number;
+  opacity: Animated.Value;
+  x: number;
+  rotation: number;
+}
+
+interface Particle {
+  id: number;
+  animation: Animated.Value;
+  x: number;
+  y: number;
+  scale: Animated.Value;
+}
+
+interface MicroBet {
+  question: string;
+  optionA: string;
+  optionB: string;
+  emoji: string;
+}
+
+interface GameRoomViewProps {
+  selectedLeague: string;
+  onBack: () => void;
+}
+
+interface LightningFlashProps {
+  visible: boolean;
+}
+
+interface ParticleEffectProps {
+  visible: boolean;
+}
+
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.7;
 const CARD_MARGIN = 15;
@@ -81,9 +117,9 @@ const LEAGUES = [
 ];
 
 // Lightning Flash Component
-const LightningFlash = ({ visible }) => {
+const LightningFlash: React.FC<LightningFlashProps> = ({ visible }) => {
   const flashAnim = useRef(new Animated.Value(0)).current;
-  const lightningPaths = useRef([]);
+  const lightningPaths = useRef<LightningPath[]>([]);
 
   useEffect(() => {
     if (visible) {
@@ -176,8 +212,8 @@ const LightningFlash = ({ visible }) => {
 };
 
 // Particle Effect Component
-const ParticleEffect = ({ visible }) => {
-  const particles = useRef([]);
+const ParticleEffect: React.FC<ParticleEffectProps> = ({ visible }) => {
+  const particles = useRef<Particle[]>([]);
   
   useEffect(() => {
     if (visible) {
@@ -251,11 +287,11 @@ const ParticleEffect = ({ visible }) => {
 };
 
 // Game Room View Component
-const GameRoomView = ({ selectedLeague, onBack }) => {
+const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, onBack }) => {
   const [timeLeft, setTimeLeft] = useState(45);
   const [coins, setCoins] = useState(300);
   const [showMicroBet, setShowMicroBet] = useState(false);
-  const [currentMicroBet, setCurrentMicroBet] = useState(null);
+  const [currentMicroBet, setCurrentMicroBet] = useState<MicroBet | null>(null);
   const [showParticles, setShowParticles] = useState(false);
   const [showLightning, setShowLightning] = useState(false);
   const insets = useSafeAreaInsets();
@@ -343,7 +379,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
         if (Math.abs(gestureState.dx) > 120) {
           const direction = gestureState.dx > 0 ? 'right' : 'left';
           const choice = direction === 'left' ? currentMicroBet?.optionA : currentMicroBet?.optionB;
-          handleSwipe(direction, choice);
+          handleSwipe(direction, choice || '');
         } else {
           Animated.spring(swipeAnimX, {
             toValue: 0,
@@ -474,7 +510,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
     setTimeout(() => setShowParticles(false), 2000);
   };
 
-  const handleSwipe = (direction, choice) => {
+  const handleSwipe = (direction: string, choice: string) => {
     // Success vibration
     Vibration.vibrate(200);
 
@@ -515,7 +551,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
     });
   };
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -611,7 +647,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
           ]}
         >
           <LinearGradient
-            colors={[...league?.gradient || ['#667eea', '#764ba2'], 'rgba(0,0,0,0.3)']}
+            colors={[...(league?.gradient || ['#667eea', '#764ba2']), 'rgba(0,0,0,0.3)'] as [string, string, string]}
             style={gameStyles.matchGradient}
           >
             <View style={gameStyles.matchOverlay}>
@@ -629,7 +665,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                     }
                   ]}
                 >
-                  <Ionicons name={league?.image} size={48} color="#ffffff" />
+                  <Ionicons name={league?.image as any} size={48} color="#ffffff" />
                 </Animated.View>
                 <Text style={gameStyles.matchStatus}>CHAMPIONSHIP FINAL</Text>
               </View>
@@ -856,7 +892,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
               <View style={gameStyles.optionsContainer}>
                 <TouchableOpacity
                   style={gameStyles.optionButton}
-                  onPress={() => handleSwipe('left', currentMicroBet?.optionA)}
+                  onPress={() => handleSwipe('left', currentMicroBet?.optionA || '')}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
@@ -878,7 +914,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                 
                 <TouchableOpacity
                   style={gameStyles.optionButton}
-                  onPress={() => handleSwipe('right', currentMicroBet?.optionB)}
+                  onPress={() => handleSwipe('right', currentMicroBet?.optionB || '')}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
@@ -911,9 +947,9 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
 // Main HomeScreen Component
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const [selectedLeague, setSelectedLeague] = useState(null);
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
 
-  const handleLeaguePress = (leagueId) => {
+  const handleLeaguePress = (leagueId: string) => {
     setSelectedLeague(leagueId);
   };
 
@@ -962,7 +998,7 @@ export default function HomeScreen() {
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={league.gradient}
+              colors={league.gradient as any}
               style={styles.cardGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -970,7 +1006,7 @@ export default function HomeScreen() {
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
                   <Ionicons
-                    name={league.image}
+                    name={league.image as any}
                     size={60}
                     color="#FFFFFF"
                   />
