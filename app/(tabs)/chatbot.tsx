@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getKnowledgeBase } from '../../utils/sportsKnowledgeBase';
 
-
 const { width } = Dimensions.get('window');
 
 interface Message {
@@ -67,90 +66,100 @@ export default function ChatbotScreen() {
   const [showModelPicker, setShowModelPicker] = useState<boolean>(false);
   const [chatId] = useState<string>(() => Date.now().toString());
 
+  const [plays, setPlays] = useState<any[]>([]); // store live play data
+  const wsRef = useRef<WebSocket | null>(null);
+
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // --- connect WebSocket for live plays ---
+  // --- connect WebSocket for live plays ---
+  useEffect(() => {
+    const ws = new WebSocket('ws://10.136.7.78:8080'); // 👈 replace with your server IP
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'play_update') {
+        // store plays, but don't spam chat
+        setPlays((prev) => [...prev.slice(-9), data]); // keep last 10 plays
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
+
   const generateResponse = async (userMessage: string): Promise<string> => {
-    console.log('🚀 Starting OpenAI request for:', userMessage);
-    console.log('🔑 API Key exists:', !!process.env.EXPO_PUBLIC_OPENAI_API_KEY);
-    console.log('🔑 API Key first 10 chars:', process.env.EXPO_PUBLIC_OPENAI_API_KEY?.substring(0, 10));
-    
+    // 🔑 Use play history only as context
+    const recentPlays = plays
+      .map(
+        (p) =>
+          `${p.clock} | ${p.description} | Score: ${p.home_points}-${p.away_points}`
+      )
+      .join('\n');
+  
+    const requestBody = {
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a helpful sports betting guide. You have access to the last few plays of the game:\n${recentPlays}\n\nUse this info to answer user questions and explain what's happening. Context for ${selectedModel}: ${getKnowledgeBase(
+            selectedModel
+          )}`,
+        },
+        {
+          role: 'user',
+          content: userMessage,
+        },
+      ],
+      max_tokens: 200,
+    };
+
     try {
-      const requestBody = {
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a helpful side guide for a charity betting app. Keep responses concise and friendly. Context for ${selectedModel}: ${getKnowledgeBase(selectedModel)}`
-          },
-          {
-            role: 'user',
-            content: userMessage
-          }
-        ],
-        max_tokens: 150,
-      };
-      
-      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
-      
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
+          Authorization: `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
         },
         body: JSON.stringify(requestBody),
       });
-
-      console.log('📥 Response status:', response.status);
-      console.log('📥 Response ok:', response.ok);
-      
       const data = await response.json();
-      console.log('📥 Response data:', JSON.stringify(data, null, 2));
-      
-      if (!response.ok) {
-        console.error('❌ API Error:', data);
-        return `API Error: ${data.error?.message || 'Unknown error'}`;
-      }
-      
-      const content = data.choices?.[0]?.message?.content;
-      console.log('✅ Final response:', content);
-      
-      return content || 'Sorry, I had trouble understanding that. Could you try rephrasing?';
-    } catch (error) {
-      console.error('❌ OpenAI API error:', error);
-      return 'Sorry, I\'m having trouble connecting right now. Please try again later.';
+      return (
+        data.choices?.[0]?.message?.content ||
+        'Sorry, I’m not sure what just happened.'
+      );
+    } catch (err) {
+      console.error('❌ OpenAI error', err);
+      return 'Error contacting AI service.';
     }
   };
 
   const sendMessage = async () => {
-    if (inputText.trim()) {
-      console.log('💬 Sending message:', inputText.trim());
-      
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        text: inputText.trim(),
-        isUser: true,
-        timestamp: new Date(),
-      };
+    if (!inputText.trim()) return;
 
-      setMessages((prev) => [...prev, userMessage]);
-      const textForResponse = inputText.trim();
-      setInputText('');
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: inputText.trim(),
+      isUser: true,
+      timestamp: new Date(),
+    };
 
-      // Get OpenAI response
-      console.log('⏳ Getting OpenAI response...');
-      const responseText = await generateResponse(textForResponse);
-      console.log('✅ Got response, adding to messages');
-      
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: responseText,
-        isUser: false,
-        timestamp: new Date(),
-      };
+    setMessages((prev) => [...prev, userMessage]);
+    const textForResponse = inputText.trim();
+    setInputText('');
 
-      setMessages((prev) => [...prev, botResponse]);
-    }
+    const responseText = await generateResponse(textForResponse);
+
+    const botResponse: Message = {
+      id: (Date.now() + 1).toString(),
+      text: responseText,
+      isUser: false,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, botResponse]);
   };
 
   useEffect(() => {
@@ -180,7 +189,7 @@ export default function ChatbotScreen() {
           <Text style={styles.botStatus}>Online • {selectedModel}</Text>
         </View>
 
-        {/* Model Toggle (top-right) */}
+        {/* Model Toggle */}
         <TouchableOpacity
           style={styles.modelToggle}
           onPress={() => setShowModelPicker((s) => !s)}
@@ -199,7 +208,7 @@ export default function ChatbotScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Dropdown Menu + Overlay */}
+      {/* Dropdown Menu */}
       {showModelPicker && (
         <>
           <TouchableOpacity
@@ -221,7 +230,9 @@ export default function ChatbotScreen() {
                     style={[styles.dropdownItem, active && styles.dropdownItemActive]}
                     onPress={() => handleSelectModel(opt)}
                   >
-                    <Text style={[styles.dropdownText, active && styles.dropdownTextActive]}>
+                    <Text
+                      style={[styles.dropdownText, active && styles.dropdownTextActive]}
+                    >
                       {opt}
                     </Text>
                     {active && <Ionicons name="checkmark" size={16} color="#30D158" />}
@@ -308,17 +319,20 @@ export default function ChatbotScreen() {
 
         <View style={styles.quickQuestions}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {['How does betting work?', 'What are coins for?', 'How does charity work?', 'Betting rules?'].map(
-              (question, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.quickQuestionButton}
-                  onPress={() => setInputText(question)}
-                >
-                  <Text style={styles.quickQuestionText}>{question}</Text>
-                </TouchableOpacity>
-              )
-            )}
+            {[
+              'How does betting work?',
+              'What are coins for?',
+              'How does charity work?',
+              'Betting rules?',
+            ].map((question, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.quickQuestionButton}
+                onPress={() => setInputText(question)}
+              >
+                <Text style={styles.quickQuestionText}>{question}</Text>
+              </TouchableOpacity>
+            ))}
           </ScrollView>
         </View>
       </View>
@@ -350,7 +364,6 @@ const styles = StyleSheet.create({
   botName: { fontSize: 18, fontWeight: '700', color: '#EFF6E0', marginBottom: 2 },
   botStatus: { fontSize: 14, color: '#30D158', fontWeight: '500' },
 
-  /* Model toggle */
   modelToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -368,14 +381,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  /* Dropdown */
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(1, 22, 30, 0.35)',
   },
   dropdown: {
     position: 'absolute',
-    top: 108, // below header
+    top: 108,
     right: 16,
     width: 220,
     backgroundColor: '#0B2430',
@@ -402,7 +414,6 @@ const styles = StyleSheet.create({
   dropdownText: { color: '#EFF6E0', fontSize: 14, fontWeight: '500' },
   dropdownTextActive: { color: '#30D158', fontWeight: '700' },
 
-  /* Messages */
   messagesContainer: { flex: 1 },
   messagesContent: { paddingVertical: 20, paddingHorizontal: 16 },
   messageContainer: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
@@ -433,7 +444,6 @@ const styles = StyleSheet.create({
   userMessageText: { fontSize: 16, color: '#EFF6E0', fontWeight: '500', lineHeight: 22 },
   botMessageText: { fontSize: 16, color: '#EFF6E0', fontWeight: '500', lineHeight: 22 },
 
-  /* Input */
   inputContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,

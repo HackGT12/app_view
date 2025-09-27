@@ -83,21 +83,26 @@ export default function Testing() {
 
   const handleVote = async (optionId: string) => {
     if (!activeMicroBetId || hasVoted || isBetClosed) return;
-
+  
+    // 🔒 lock immediately
+    setHasVoted(true);
+  
     try {
       const docRef = doc(db, 'microBets', activeMicroBetId);
       const optionIndex = microBetData?.options.findIndex(opt => opt.id === optionId);
-
+  
       if (optionIndex !== undefined && optionIndex >= 0) {
         await updateDoc(docRef, {
           [`options.${optionIndex}.votes`]: increment(1)
         });
-
-        setHasVoted(true);
+  
+        // Refresh from server
         fetchMicroBetData(activeMicroBetId);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to submit vote');
+      // 🔓 unlock if it failed
+      setHasVoted(false);
     }
   };
 
