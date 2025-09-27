@@ -12,6 +12,7 @@ import {
   StatusBar,
   Vibration,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -252,12 +253,11 @@ const ParticleEffect = ({ visible }) => {
 
 // Game Room View Component
 const GameRoomView = ({ selectedLeague, onBack }) => {
+  const [activeTab, setActiveTab] = useState('Live Info');
   const [timeLeft, setTimeLeft] = useState(45);
   const [coins, setCoins] = useState(300);
   const [showMicroBet, setShowMicroBet] = useState(false);
   const [currentMicroBet, setCurrentMicroBet] = useState(null);
-  const [showParticles, setShowParticles] = useState(false);
-  const [showLightning, setShowLightning] = useState(false);
   const insets = useSafeAreaInsets();
 
   // Animation values
@@ -342,7 +342,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
       onPanResponderRelease: (evt, gestureState) => {
         if (Math.abs(gestureState.dx) > 120) {
           const direction = gestureState.dx > 0 ? 'right' : 'left';
-          const choice = direction === 'left' ? currentMicroBet?.optionA : currentMicroBet?.optionB;
+          const choice = direction === 'left' ? (currentMicroBet?.optionA || '') : (currentMicroBet?.optionB || '');
           handleSwipe(direction, choice);
         } else {
           Animated.spring(swipeAnimX, {
@@ -477,22 +477,11 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
   };
 
   const handleSwipe = (direction, choice) => {
-    // Success vibration
-    Vibration.vibrate(200);
-
-    // Explosive exit animation
-    Animated.parallel([
-      Animated.timing(swipeAnimX, {
-        toValue: direction === 'left' ? -width * 1.5 : width * 1.5,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(popupScale, {
-        toValue: 0.8,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
+    Animated.timing(swipeAnimX, {
+      toValue: direction === 'left' ? -width : width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
       setShowMicroBet(false);
       swipeAnimX.setValue(0);
       popupScale.setValue(0);
@@ -517,7 +506,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
     });
   };
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -613,27 +602,16 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
           ]}
         >
           <LinearGradient
-            colors={[...league?.gradient || ['#667eea', '#764ba2'], 'rgba(0,0,0,0.3)']}
+            colors={league?.gradient || ['#667eea', '#764ba2']}
             style={gameStyles.matchGradient}
           >
             <View style={gameStyles.matchOverlay}>
               <View style={gameStyles.matchContent}>
-                <Animated.View 
-                  style={[
-                    gameStyles.matchIcon,
-                    {
-                      transform: [{
-                        rotate: sparkleAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0deg', '360deg'],
-                        })
-                      }]
-                    }
-                  ]}
-                >
+                <View style={gameStyles.matchIcon}>
                   <Ionicons name={league?.image} size={48} color="#ffffff" />
-                </Animated.View>
-                <Text style={gameStyles.matchStatus}>CHAMPIONSHIP FINAL</Text>
+                </View>
+                <Text style={gameStyles.liveText}>LIVE NOW</Text>
+                <View style={gameStyles.livePulse} />
               </View>
             </View>
           </LinearGradient>
@@ -858,12 +836,12 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                 <Text style={gameStyles.popupSubtitle}>Make your prediction</Text>
               </View>
               
-              <Text style={gameStyles.popupQuestion}>{currentMicroBet?.question}</Text>
+              <Text style={gameStyles.popupQuestion}>{currentMicroBet?.question || ''}</Text>
               
               {/* Beautiful Options */}
               <View style={gameStyles.optionsContainer}>
                 <TouchableOpacity
-                  style={gameStyles.optionButton}
+                  style={[gameStyles.optionButton, gameStyles.optionLeft]}
                   onPress={() => handleSwipe('left', currentMicroBet?.optionA)}
                   activeOpacity={0.8}
                 >
@@ -871,10 +849,8 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                     colors={['#667eea', '#764ba2']}
                     style={gameStyles.optionGradient}
                   >
-                    <View style={gameStyles.optionContent}>
-                      <Ionicons name="chevron-back" size={24} color="#ffffff" />
-                      <Text style={gameStyles.optionText}>{currentMicroBet?.optionA}</Text>
-                    </View>
+                    <Text style={gameStyles.optionText}>{currentMicroBet?.optionA}</Text>
+                    <Text style={gameStyles.swipeHint}>👈 Swipe</Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 
@@ -885,7 +861,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                 </View>
                 
                 <TouchableOpacity
-                  style={gameStyles.optionButton}
+                  style={[gameStyles.optionButton, gameStyles.optionRight]}
                   onPress={() => handleSwipe('right', currentMicroBet?.optionB)}
                   activeOpacity={0.8}
                 >
@@ -893,10 +869,8 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                     colors={['#f093fb', '#f5576c']}
                     style={gameStyles.optionGradient}
                   >
-                    <View style={gameStyles.optionContent}>
-                      <Text style={gameStyles.optionText}>{currentMicroBet?.optionB}</Text>
-                      <Ionicons name="chevron-forward" size={24} color="#ffffff" />
-                    </View>
+                    <Text style={gameStyles.optionText}>{currentMicroBet?.optionB}</Text>
+                    <Text style={gameStyles.swipeHint}>Swipe 👉</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
@@ -919,9 +893,9 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
 // Main HomeScreen Component
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const [selectedLeague, setSelectedLeague] = useState(null);
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
 
-  const handleLeaguePress = (leagueId) => {
+  const handleLeaguePress = (leagueId: string) => {
     setSelectedLeague(leagueId);
   };
 
@@ -970,7 +944,7 @@ export default function HomeScreen() {
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={league.gradient}
+              colors={league.gradient as [string, string]}
               style={styles.cardGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -978,16 +952,14 @@ export default function HomeScreen() {
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
                   <Ionicons
-                    name={league.image}
+                    name={league.image as any}
                     size={60}
                     color="#FFFFFF"
                   />
                 </View>
                 <Text style={styles.leagueName}>{league.name}</Text>
                 <View style={styles.gamesBadge}>
-                  <Text style={styles.gamesText}>
-                    {league.activeGames} Active Games
-                  </Text>
+                  <Text style={styles.gamesText}>{league.activeGames} Active Games</Text>
                 </View>
                 <View style={styles.liveIndicator}>
                   <View style={styles.liveDot} />
@@ -1011,31 +983,12 @@ export default function HomeScreen() {
 
 // Original styles
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#01161E',
-  },
-  header: {
-    paddingHorizontal: 30,
-    marginBottom: 30,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#EFF6E0',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#AEC3B0',
-    fontWeight: '400',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingVertical: 20,
-  },
+  container: { flex: 1, backgroundColor: '#01161E' },
+  header: { paddingHorizontal: 30, marginBottom: 30 },
+  title: { fontSize: 32, fontWeight: '800', color: '#EFF6E0', marginBottom: 8 },
+  subtitle: { fontSize: 16, color: '#AEC3B0', fontWeight: '400' },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingVertical: 20 },
   leagueCard: {
     width: CARD_WIDTH,
     height: 280,
@@ -1043,106 +996,41 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     elevation: 8,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  cardGradient: {
-    flex: 1,
-    padding: 20,
-  },
-  cardContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  cardGradient: { flex: 1, padding: 20 },
+  cardContent: { flex: 1, alignItems: 'center', justifyContent: 'space-between' },
   iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 100, height: 100, borderRadius: 50,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
+    alignItems: 'center', justifyContent: 'center', marginTop: 10,
   },
-  leagueName: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
+  leagueName: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', textAlign: 'center' },
   gamesBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 15,
+    paddingHorizontal: 16, paddingVertical: 6, borderRadius: 15,
   },
-  gamesText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
-  },
+  gamesText: { fontSize: 12, fontWeight: '600', color: '#333' },
   liveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12,
   },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF3B30',
-    marginRight: 6,
-  },
-  liveText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#333',
-  },
-  bottomSection: {
-    paddingHorizontal: 30,
-    paddingBottom: 30,
-  },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF3B30', marginRight: 6 },
+  liveText: { fontSize: 10, fontWeight: '700', color: '#333' },
+  bottomSection: { paddingHorizontal: 30, paddingBottom: 30 },
   charityInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#124559',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#598392',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#124559', paddingVertical: 16, paddingHorizontal: 20,
+    borderRadius: 12, borderWidth: 1, borderColor: '#598392',
   },
   charityText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#EFF6E0',
     marginLeft: 8,
-  },
-  lightning: {
-    position: 'absolute',
-    top: '20%',
-  },
-  lightningBolt: {
-    fontSize: 50,
-    color: '#FFD700',
-    textShadowColor: '#FFD700',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
-  },
-  particle: {
-    position: 'absolute',
-    width: 4,
-    height: 4,
-    backgroundColor: '#FFD700',
-    borderRadius: 2,
   },
 });
 
@@ -1557,6 +1445,12 @@ const gameStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+  },
+  optionLeft: {
+    marginRight: 6,
+  },
+  optionRight: {
+    marginLeft: 6,
   },
   optionGradient: {
     padding: 20,

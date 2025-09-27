@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useEffect, useState } from 'react';
-import { doc, getDoc, updateDoc, increment, collection, getDocs, orderBy, query } from 'firebase/firestore';
-import { db } from '../../firebaseConfig';
+import { useEffect, useState, useRef } from 'react';
+import { doc, getDoc, updateDoc, increment, collection, getDocs, orderBy, query, arrayUnion } from 'firebase/firestore';
+import { db, auth } from '../../firebaseConfig'; // ✅ make sure auth is exported in firebaseConfig
 
 interface MicroBetOption {
   id: string;
@@ -31,13 +31,32 @@ export default function Testing() {
   const [previousMicroBets, setPreviousMicroBets] = useState<MicroBetData[]>([]);
   const [isBetClosed, setIsBetClosed] = useState(false);
 
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchMicroBetData = async (betId: string) => {
     try {
       const docRef = doc(db, 'microBets', betId);
       const docSnap = await getDoc(docRef);
-      
+  
       if (docSnap.exists()) {
-        setMicroBetData(docSnap.data() as MicroBetData);
+        const data = docSnap.data() as MicroBetData;
+  
+        // 🔑 Ensure options is always an array
+        let normalizedOptions: MicroBetOption[] = [];
+        if (Array.isArray(data.options)) {
+          normalizedOptions = data.options;
+        } else if (data.options && typeof data.options === 'object') {
+          normalizedOptions = Object.keys(data.options).map((key) => ({
+            id: key,
+            ...(data.options as any)[key],
+          }));
+        }
+  
+        setMicroBetData({
+          ...data,
+          options: normalizedOptions,
+        });
         setIsBetClosed(false);
         setHasVoted(false);
       }
@@ -51,11 +70,11 @@ export default function Testing() {
       const q = query(collection(db, 'microBets'), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
       const bets: MicroBetData[] = [];
-      
+
       querySnapshot.forEach((doc) => {
         bets.push(doc.data() as MicroBetData);
       });
-      
+
       setPreviousMicroBets(bets);
     } catch (error) {
       console.error('Error loading previous micro bets:', error);
@@ -64,21 +83,38 @@ export default function Testing() {
 
   const handleVote = async (optionId: string) => {
     if (!activeMicroBetId || hasVoted || isBetClosed) return;
-    
+  
+    setHasVoted(true); // 🔒 lock immediately
+  
     try {
-      const docRef = doc(db, 'microBets', activeMicroBetId);
+      // ✅ update global microBet vote count
+      const betRef = doc(db, 'microBets', activeMicroBetId);
       const optionIndex = microBetData?.options.findIndex(opt => opt.id === optionId);
-      
       if (optionIndex !== undefined && optionIndex >= 0) {
-        await updateDoc(docRef, {
+        await updateDoc(betRef, {
           [`options.${optionIndex}.votes`]: increment(1)
         });
-        
-        setHasVoted(true);
-        fetchMicroBetData(activeMicroBetId);
       }
+
+      // ✅ also log this bet under the current user
+      const user = auth.currentUser;
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          activeBets: arrayUnion({
+            betId: activeMicroBetId,
+            optionId,
+            question: microBetData?.question || '',
+            status: 'active',
+            placedAt: new Date()
+          })
+        });
+      }
+
+      fetchMicroBetData(activeMicroBetId);
     } catch (error) {
       Alert.alert('Error', 'Failed to submit vote');
+      setHasVoted(false); // 🔓 unlock if failed
     }
   };
 
@@ -87,19 +123,23 @@ export default function Testing() {
     return microBetData.options.find(opt => opt.id === microBetData.answer);
   };
 
-  useEffect(() => {
-    loadPreviousMicroBets();
-    
-    const ws = new WebSocket('ws://16.56.9.190:8080');
+  // --- WebSocket with auto-reconnect ---
+  const connectWebSocket = () => {
+    const ws = new WebSocket('ws://10.136.7.78:8080'); // 👈 replace with your server IP
+    wsRef.current = ws;
 
     ws.onopen = () => {
       setConnectionStatus('Connected');
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
     };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       setMessages(prev => [...prev, event.data]);
-      
+
       if (data.activeMicroBetId === null) {
         setIsBetClosed(true);
         setActiveMicroBetId(null);
@@ -111,13 +151,32 @@ export default function Testing() {
 
     ws.onclose = () => {
       setConnectionStatus('Disconnected');
+      scheduleReconnect();
     };
 
     ws.onerror = () => {
       setConnectionStatus('Error');
+      ws.close(); // force trigger onclose
     };
+  };
 
-    return () => ws.close();
+  const scheduleReconnect = () => {
+    if (!reconnectTimer.current) {
+      reconnectTimer.current = setTimeout(() => {
+        console.log('🔄 Attempting to reconnect...');
+        connectWebSocket();
+      }, 5000); // retry after 5s
+    }
+  };
+
+  useEffect(() => {
+    loadPreviousMicroBets();
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    };
   }, []);
 
   return (
@@ -126,21 +185,21 @@ export default function Testing() {
       <Text style={[styles.status, { color: connectionStatus === 'Connected' ? '#4CAF50' : '#F44336' }]}>
         Status: {connectionStatus}
       </Text>
-      
+
       {microBetData && (
         <View style={styles.microBetContainer}>
           <Text style={styles.question}>{microBetData.question}</Text>
           <Text style={styles.description}>{microBetData.actionDescription}</Text>
           <Text style={styles.sponsor}>Sponsored by: {microBetData.sponsor}</Text>
           <Text style={styles.donation}>Donation: ${microBetData.donation} / ${microBetData.maxDonation}</Text>
-          
+
           {isBetClosed && getWinnerOption() ? (
             <View style={styles.winnerContainer}>
               <Text style={styles.winnerText}>Winner: {getWinnerOption()?.text}</Text>
             </View>
           ) : (
             <View style={styles.optionsContainer}>
-              {microBetData.options.map((option) => (
+              {microBetData.options?.map((option) => (
                 <TouchableOpacity
                   key={option.id}
                   style={[styles.optionButton, hasVoted && styles.disabledButton]}
@@ -155,7 +214,7 @@ export default function Testing() {
           )}
         </View>
       )}
-      
+
       <ScrollView style={styles.messageContainer}>
         {messages.map((msg, idx) => (
           <Text key={idx} style={styles.message}>{msg}</Text>
@@ -166,97 +225,21 @@ export default function Testing() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#01161E',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  status: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  microBetContainer: {
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 20,
-  },
-  question: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 10,
-  },
-  description: {
-    fontSize: 14,
-    color: '#AEC3B0',
-    marginBottom: 8,
-  },
-  sponsor: {
-    fontSize: 12,
-    color: '#598392',
-    marginBottom: 5,
-  },
-  donation: {
-    fontSize: 12,
-    color: '#598392',
-    marginBottom: 15,
-  },
-  optionsContainer: {
-    gap: 10,
-  },
-  optionButton: {
-    backgroundColor: '#598392',
-    padding: 12,
-    borderRadius: 6,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  optionText: {
-    color: '#EFF6E0',
-    fontSize: 14,
-    flex: 1,
-  },
-  voteCount: {
-    color: '#AEC3B0',
-    fontSize: 12,
-  },
-  winnerContainer: {
-    backgroundColor: '#4CAF50',
-    padding: 15,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  winnerText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  messageContainer: {
-    flex: 1,
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 10,
-  },
-  message: {
-    color: '#EFF6E0',
-    fontSize: 14,
-    marginBottom: 5,
-    padding: 5,
-    backgroundColor: '#598392',
-    borderRadius: 4,
-  },
+  container: { flex: 1, backgroundColor: '#01161E', padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#EFF6E0', marginBottom: 10, textAlign: 'center' },
+  status: { fontSize: 16, fontWeight: '600', marginBottom: 20, textAlign: 'center' },
+  microBetContainer: { backgroundColor: '#124559', borderRadius: 8, padding: 15, marginBottom: 20 },
+  question: { fontSize: 18, fontWeight: 'bold', color: '#EFF6E0', marginBottom: 10 },
+  description: { fontSize: 14, color: '#AEC3B0', marginBottom: 8 },
+  sponsor: { fontSize: 12, color: '#598392', marginBottom: 5 },
+  donation: { fontSize: 12, color: '#598392', marginBottom: 15 },
+  optionsContainer: { gap: 10 },
+  optionButton: { backgroundColor: '#598392', padding: 12, borderRadius: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  disabledButton: { opacity: 0.6 },
+  optionText: { color: '#EFF6E0', fontSize: 14, flex: 1 },
+  voteCount: { color: '#AEC3B0', fontSize: 12 },
+  winnerContainer: { backgroundColor: '#4CAF50', padding: 15, borderRadius: 6, alignItems: 'center' },
+  winnerText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  messageContainer: { flex: 1, backgroundColor: '#124559', borderRadius: 8, padding: 10 },
+  message: { color: '#EFF6E0', fontSize: 14, marginBottom: 5, padding: 5, backgroundColor: '#598392', borderRadius: 4 },
 });
