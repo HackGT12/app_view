@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,16 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getAuth } from 'firebase/auth';
+import { FirebaseService, UserData, Reward } from '../../utils/firebaseService';
+import RewardsManager from '../../components/RewardsManager';
 
 const { width } = Dimensions.get('window');
 
@@ -26,7 +32,7 @@ const C_ACCENT = '#598392';
 const C_SUB = '#AEC3B0';
 const C_TEXT = '#EFF6E0';
 
-const USER_DATA = {
+const DEFAULT_USER_DATA = {
   username: 'SportsFan2025',
   favoriteTeams: ['Chiefs', 'Lakers', 'Dodgers'],
   favoriteLeagues: ['NFL', 'NBA', 'MLB'],
@@ -34,8 +40,8 @@ const USER_DATA = {
   dailyStreak: 12,
   totalBets: 156,
   winRate: 61,
-  currentCoins: 1247,
-  rewardsProgress: 75, // 0-100
+  currentCoins: 0,
+  rewardsProgress: 75,
   rewardLevel: 2,
 };
 
@@ -45,12 +51,7 @@ const PROMO_CARDS = [
   { id: '3', coins: 300, title: 'Charity Champion', description: 'Help raise $500 for charity', progress: 92 },
 ];
 
-const STATS = [
-  { key: 'total', label: 'Total Bets', value: USER_DATA.totalBets.toString(), icon: 'bar-chart' },
-  { key: 'win', label: 'Win Rate', value: `${USER_DATA.winRate}%`, icon: 'trophy' },
-  { key: 'streak', label: 'Daily Streak', value: `${USER_DATA.dailyStreak}d`, icon: 'flame' },
-  { key: 'charity', label: 'Charity Raised', value: `$${USER_DATA.lifetimeCharity}`, icon: 'heart' },
-];
+
 
 /** Swipeable Active Bets (inside Stats) */
 const ACTIVE_BETS = [
@@ -63,12 +64,55 @@ const ACTIVE_BETS = [
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const auth = getAuth();
+  const user = auth.currentUser;
+  
   const [selectedTab, setSelectedTab] = useState<'stats' | 'rewards'>('stats');
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      fetchUserData();
+    }
+  }, [user]);
+
+  const fetchUserData = async () => {
+    if (!user) return;
+    
+    try {
+      const data = await FirebaseService.getUserData(user.uid);
+      setUserData(data);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchUserData();
+    setRefreshing(false);
+  };
+
+
+
+  const displayUserData = userData ? {
+    ...DEFAULT_USER_DATA,
+    ...userData,
+    name: userData.name || user?.displayName || DEFAULT_USER_DATA.username
+  } : {
+    ...DEFAULT_USER_DATA,
+    name: user?.displayName || DEFAULT_USER_DATA.username,
+    coins: 0
+  };
 
   const renderProgressBar = () => {
-    const currentRange = USER_DATA.rewardLevel * 100;
-    const nextRange = (USER_DATA.rewardLevel + 1) * 100;
-    const progress = USER_DATA.rewardsProgress;
+    const currentRange = displayUserData.rewardLevel * 100;
+    const nextRange = (displayUserData.rewardLevel + 1) * 100;
+    const progress = displayUserData.rewardsProgress;
 
     return (
       <View style={styles.progressSection}>
@@ -86,7 +130,7 @@ export default function ProfileScreen() {
               end={{ x: 1, y: 0 }}
             />
           </View>
-          <Text style={styles.progressText}>{USER_DATA.rewardsProgress}/100 points</Text>
+          <Text style={styles.progressText}>{displayUserData.rewardsProgress}/100 points</Text>
         </View>
       </View>
     );
@@ -145,6 +189,27 @@ export default function ProfileScreen() {
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={C_ACCENT} />
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (!user) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Please log in to view your profile</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
       <View style={styles.header}>
@@ -153,8 +218,12 @@ export default function ProfileScreen() {
             <Ionicons name="person" size={40} color={C_BG} />
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.username}>{USER_DATA.username}</Text>
-            <Text style={styles.favoriteTeams}>{USER_DATA.favoriteTeams.join(' • ')}</Text>
+            <Text style={styles.username}>{displayUserData.name}</Text>
+            <Text style={styles.favoriteTeams}>{displayUserData.favoriteTeams?.join(' • ') || 'No favorite teams'}</Text>
+            <View style={styles.coinsContainer}>
+              <Ionicons name="diamond" size={16} color={C_ACCENT} />
+              <Text style={styles.coinsText}>{displayUserData.coins} coins</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -176,7 +245,14 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#598392" />
+        }
+      >
         {selectedTab === 'stats' && (
           <>
             {/* Betting Style */}
@@ -186,7 +262,7 @@ export default function ProfileScreen() {
                 <Ionicons name="trending-up" size={18} color={C_SUB} />
               </View>
               <Text style={styles.ticketPrimaryText}>
-                You pick <Text style={{ fontWeight: '900' }}>OVER {USER_DATA.winRate}%</Text> of the time
+                You pick <Text style={{ fontWeight: '900' }}>OVER {displayUserData.winRate}%</Text> of the time
               </Text>
               <View style={[styles.neonBar, { width: '72%', marginTop: 12 }]} />
             </View>
@@ -196,7 +272,12 @@ export default function ProfileScreen() {
 
             {/* Stats block — 2x2 */}
             <View style={styles.statsGrid}>
-              {STATS.map((stat) => (
+              {[
+                { key: 'total', label: 'Total Bets', value: displayUserData.totalBets?.toString() || '0', icon: 'bar-chart' },
+                { key: 'win', label: 'Win Rate', value: `${displayUserData.winRate || 0}%`, icon: 'trophy' },
+                { key: 'streak', label: 'Daily Streak', value: `${displayUserData.dailyStreak || 0}d`, icon: 'flame' },
+                { key: 'charity', label: 'Charity Raised', value: `$${displayUserData.lifetimeCharity || 0}`, icon: 'heart' },
+              ].map((stat) => (
                 <View key={stat.key} style={styles.statTile}>
                   <View style={styles.statTopRow}>
                     <Text style={styles.statValue}>{stat.value}</Text>
@@ -212,7 +293,7 @@ export default function ProfileScreen() {
             <View style={{ marginTop: 8, marginBottom: 24 }}>
               <Text style={styles.sectionTitle}>Favorite Leagues</Text>
               <View style={styles.leaguesList}>
-                {USER_DATA.favoriteLeagues.map((league, index) => (
+                {(displayUserData.favoriteLeagues || []).map((league, index) => (
                   <View key={index} style={styles.leagueChip}>
                     <Text style={styles.leagueChipText}>{league}</Text>
                   </View>
@@ -224,32 +305,22 @@ export default function ProfileScreen() {
 
         {selectedTab === 'rewards' && (
           <>
-            {/* Progress (already palette-matched) */}
-            {renderProgressBar()}
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={C_ACCENT} />
+                <Text style={styles.loadingText}>Loading rewards...</Text>
+              </View>
+            ) : (
+              <>
+                {/* Progress */}
+                {renderProgressBar()}
 
-            {/* Rewards Promos — now same look as stats cards */}
-            <View style={styles.promoSection}>
-              <Text style={styles.sectionTitle}>Earn More Coins</Text>
-              {PROMO_CARDS.map((promo) => (
-                <View key={promo.id} style={styles.promoTicket}>
-                  <View style={styles.promoTopRow}>
-                    <View style={{ flex: 1, paddingRight: 8 }}>
-                      <Text style={styles.promoTitleText}>{promo.title}</Text>
-                      <Text style={styles.promoDescText}>{promo.description}</Text>
-                    </View>
-                    <View style={styles.promoCoinBadge}>
-                      <Ionicons name="diamond" size={16} color={C_TEXT} />
-                      <Text style={styles.promoCoins}>{promo.coins}</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.promoBarBg}>
-                    <View style={[styles.promoBarFill, { width: `${promo.progress}%` }]} />
-                  </View>
-                  <Text style={styles.promoProgressLabel}>{promo.progress}%</Text>
-                </View>
-              ))}
-            </View>
+
+                {/* Rewards Manager */}
+                <RewardsManager />
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -267,7 +338,9 @@ const styles = StyleSheet.create({
   },
   profileInfo: { flex: 1 },
   username: { fontSize: 24, fontWeight: '800', color: C_TEXT, marginBottom: 4 },
-  favoriteTeams: { fontSize: 16, color: C_SUB, fontWeight: '500' },
+  favoriteTeams: { fontSize: 16, color: C_SUB, fontWeight: '500', marginBottom: 4 },
+  coinsContainer: { flexDirection: 'row', alignItems: 'center' },
+  coinsText: { fontSize: 14, fontWeight: '700', color: C_ACCENT, marginLeft: 4 },
 
   // Tabs
   tabContainer: {
@@ -356,45 +429,6 @@ const styles = StyleSheet.create({
   progressBarFill: { height: 8, borderRadius: 4 },
   progressText: { fontSize: 14, color: C_SUB, textAlign: 'center' },
 
-  // Rewards promos — STAT-STYLE cards
-  promoSection: { marginBottom: 24 },
-  promoTicket: {
-    marginHorizontal: SCREEN_PAD,
-    marginBottom: 12,
-    borderRadius: 16,
-    backgroundColor: C_CARD,
-    borderWidth: 1,
-    borderColor: C_ACCENT,
-    padding: 16,
-  },
-  promoTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  promoTitleText: { fontSize: 16, fontWeight: '900', color: C_TEXT },
-  promoDescText: { fontSize: 12, color: C_SUB, marginTop: 4 },
-
-  promoCoinBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C_BG,
-    borderWidth: 1,
-    borderColor: C_ACCENT,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  promoCoins: { fontSize: 14, fontWeight: '800', color: C_TEXT, marginLeft: 6 },
-
-  promoBarBg: {
-    height: 6,
-    backgroundColor: C_BG,
-    borderRadius: 3,
-    borderWidth: 1,
-    borderColor: C_ACCENT,
-    marginTop: 12,
-    overflow: 'hidden',
-  },
-  promoBarFill: { height: 6, backgroundColor: C_ACCENT },
-  promoProgressLabel: { fontSize: 12, fontWeight: '700', color: C_SUB, marginTop: 6, textAlign: 'right' },
-
   // Active Bets ticket styles (stretched)
   activeScrollView: { flexGrow: 0 },
   activeScrollContent: { paddingVertical: 8 },
@@ -432,4 +466,10 @@ const styles = StyleSheet.create({
 
   // Accent bar
   neonBar: { height: 3, backgroundColor: C_ACCENT, borderRadius: 2, opacity: 0.95 },
+
+  // Loading
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  loadingText: { fontSize: 16, color: C_SUB, marginTop: 12 },
+
+
 });

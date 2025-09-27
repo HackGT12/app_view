@@ -16,6 +16,63 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { db } from "../../firebaseConfig"; // ✅ adjust path if needed
+
+// Type definitions
+interface LightningPath {
+  id: number;
+  opacity: Animated.Value;
+  x: number;
+  rotation: number;
+}
+
+interface Particle {
+  id: number;
+  animation: Animated.Value;
+  x: number;
+  y: number;
+  scale: Animated.Value;
+}
+
+interface MicroBet {
+  question: string;
+  optionA: string;
+  optionB: string;
+  emoji: string;
+}
+
+interface MicroBetOption {
+  id: string;
+  text: string;
+  votes: number;
+}
+
+interface MicroBetData {
+  actionDescription: string;
+  answer: string;
+  closedAt: any;
+  createdAt: any;
+  donation: number;
+  maxDonation: number;
+  options: MicroBetOption[];
+  question: string;
+  sponsor: string;
+  status: string;
+}
+
+interface GameRoomViewProps {
+  selectedLeague: string;
+  onBack: () => void;
+}
+
+interface LightningFlashProps {
+  visible: boolean;
+}
+
+interface ParticleEffectProps {
+  visible: boolean;
+}
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.7;
@@ -81,9 +138,9 @@ const LEAGUES = [
 ];
 
 // Lightning Flash Component
-const LightningFlash = ({ visible }) => {
+const LightningFlash: React.FC<LightningFlashProps> = ({ visible }) => {
   const flashAnim = useRef(new Animated.Value(0)).current;
-  const lightningPaths = useRef([]);
+  const lightningPaths = useRef<LightningPath[]>([]);
 
   useEffect(() => {
     if (visible) {
@@ -176,8 +233,8 @@ const LightningFlash = ({ visible }) => {
 };
 
 // Particle Effect Component
-const ParticleEffect = ({ visible }) => {
-  const particles = useRef([]);
+const ParticleEffect: React.FC<ParticleEffectProps> = ({ visible }) => {
+  const particles = useRef<Particle[]>([]);
   
   useEffect(() => {
     if (visible) {
@@ -251,13 +308,15 @@ const ParticleEffect = ({ visible }) => {
 };
 
 // Game Room View Component
-const GameRoomView = ({ selectedLeague, onBack }) => {
+const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, onBack }) => {
   const [timeLeft, setTimeLeft] = useState(45);
   const [coins, setCoins] = useState(300);
   const [showMicroBet, setShowMicroBet] = useState(false);
-  const [currentMicroBet, setCurrentMicroBet] = useState(null);
+  const [currentMicroBet, setCurrentMicroBet] = useState<MicroBet | null>(null);
   const [showParticles, setShowParticles] = useState(false);
   const [showLightning, setShowLightning] = useState(false);
+  const [previousMicroBets, setPreviousMicroBets] = useState<MicroBetData[]>([]); // ✅ add this
+
   const insets = useSafeAreaInsets();
 
   // Animation values
@@ -315,6 +374,42 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
     ).start();
   }, []);
 
+  useEffect(() => {
+    const loadPreviousMicroBets = async () => {
+      try {
+        const q = query(collection(db, 'microBets'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        const bets: MicroBetData[] = [];
+  
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data() as MicroBetData;
+        
+          // Normalize options into array
+          let normalizedOptions: MicroBetOption[] = [];
+          if (Array.isArray(data.options)) {
+            normalizedOptions = data.options;
+          } else if (data.options && typeof data.options === 'object') {
+            normalizedOptions = Object.keys(data.options).map((key) => ({
+              id: key,
+              ...(data.options as any)[key],
+            }));
+          }
+        
+          bets.push({
+            ...data,
+            options: normalizedOptions,
+          });
+        });
+  
+        setPreviousMicroBets(bets);
+      } catch (error) {
+        console.error('Error loading previous micro bets:', error);
+      }
+    };
+  
+    loadPreviousMicroBets();
+  }, []);
+
   // Entry animation
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -343,7 +438,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
         if (Math.abs(gestureState.dx) > 120) {
           const direction = gestureState.dx > 0 ? 'right' : 'left';
           const choice = direction === 'left' ? currentMicroBet?.optionA : currentMicroBet?.optionB;
-          handleSwipe(direction, choice);
+          handleSwipe(direction, choice || '');
         } else {
           Animated.spring(swipeAnimX, {
             toValue: 0,
@@ -356,10 +451,11 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
 
   const league = LEAGUES.find(l => l.id === selectedLeague);
   
-  const matchData = {
-    homeTeam: { name: 'Brazil', flag: '🇧🇷', score: 3 },
-    awayTeam: { name: 'Argentina', flag: '🇦🇷', score: 0 },
-  };
+  const [matchData, setMatchData] = useState({
+    homeTeam: { name: 'Falcons', flag: '🏈', score: 0 },
+    awayTeam: { name: 'Buccaneers', flag: '🏴‍☠️', score: 0 },
+    clock: '15:00',
+  });  
 
   const pastBets = [
     {
@@ -407,74 +503,142 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
     return () => clearInterval(timer);
   }, []);
 
-  const triggerMicroBet = () => {
-    const microBets = [
-      {
-        question: "Who will score the next goal?",
-        optionA: "Brazil",
-        optionB: "Argentina",
-        emoji: "⚡"
-      },
-      {
-        question: "Next corner kick?",
-        optionA: "Brazil",
-        optionB: "Argentina",
-        emoji: "⚡"   
-      },
-      {
-        question: "Next player to get fouled?",
-        optionA: "Messi",
-        optionB: "Neymar",
-        emoji: "⚡"
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (selectedLeague !== 'nfl') return; // ✅ only run for NFL
+  
+    const ws = new WebSocket('ws://10.136.7.78:8080');
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('✅ Connected to WebSocket');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('📡 Received data:', data);
+  
+        // ✅ update scores
+        if (
+          typeof data.homeTeamScore === 'number' &&
+          typeof data.awayTeamScore === 'number'
+        ) {
+          setMatchData((prev) => ({
+            ...prev,
+            homeTeam: { ...prev.homeTeam, score: data.homeTeamScore },
+            awayTeam: { ...prev.awayTeam, score: data.awayTeamScore },
+          }));
+        }
+  
+        // ✅ always pull clock from the latest play
+        if (data?.payload?.clock) {
+          setMatchData((prev) => ({
+            ...prev,
+            clock: data.payload.clock,
+          }));
+        }
+      } catch (err) {
+        console.error('Bad WS data:', err);
       }
-    ];
+    };
 
-    const randomBet = microBets[Math.floor(Math.random() * microBets.length)];
-    setCurrentMicroBet(randomBet);
-    
-    // Lightning first, then popup
-    setShowLightning(true);
-    setShowParticles(true);
+    ws.onclose = () => {
+      console.log('⚠️ WebSocket disconnected');
+    };
 
-    // Epic vibration pattern
-    if (Platform.OS === 'ios') {
-      Vibration.vibrate([0, 100, 50, 100, 50, 200]);
-    } else {
-      Vibration.vibrate([100, 50, 100, 50, 200]);
+    ws.onerror = (error) => {
+      console.error('❌ WebSocket error:', error);
+    };
+  
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [selectedLeague]);  
+
+  const triggerMicroBet = async () => {
+    try {
+      // 🔎 get most recent micro bets
+      const q = query(collection(db, "microBets"), orderBy("createdAt", "desc"));
+      const querySnapshot = await getDocs(q);
+  
+      const bets: MicroBetData[] = [];
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data() as MicroBetData;
+  
+        // ✅ normalize options
+        let normalizedOptions: MicroBetOption[] = [];
+        if (Array.isArray(data.options)) {
+          normalizedOptions = data.options;
+        } else if (data.options && typeof data.options === "object") {
+          normalizedOptions = Object.keys(data.options).map((key) => ({
+            id: key,
+            ...(data.options as any)[key],
+          }));
+        }
+  
+        bets.push({
+          ...data,
+          options: normalizedOptions,
+        });
+      });
+  
+      if (bets.length > 0) {
+        const latestBet = bets[0]; // 🆕 pick the most recent
+  
+        setCurrentMicroBet({
+          question: latestBet.question,
+          optionA: latestBet.options[0]?.text || "Option A",
+          optionB: latestBet.options[1]?.text || "Option B",
+          emoji: "⚡",
+        });
+  
+        // --- keep all your animations below unchanged ---
+        setShowLightning(true);
+        setShowParticles(true);
+  
+        if (Platform.OS === "ios") {
+          Vibration.vibrate([0, 100, 50, 100, 50, 200]);
+        } else {
+          Vibration.vibrate([100, 50, 100, 50, 200]);
+        }
+  
+        Animated.sequence([
+          Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        ]).start();
+  
+        setTimeout(() => {
+          setShowLightning(false);
+          setShowMicroBet(true);
+  
+          Animated.parallel([
+            Animated.spring(popupScale, {
+              toValue: 1,
+              tension: 100,
+              friction: 6,
+              useNativeDriver: true,
+            }),
+            Animated.timing(popupOpacity, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }, 800);
+  
+        setTimeout(() => setShowParticles(false), 2000);
+      }
+    } catch (error) {
+      console.error("❌ Failed to trigger micro bet:", error);
     }
+  };  
 
-    // Screen shake effect
-    Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
-    ]).start();
-
-    setTimeout(() => {
-      setShowLightning(false);
-      setShowMicroBet(true);
-
-      // Epic popup animation
-      Animated.parallel([
-        Animated.spring(popupScale, {
-          toValue: 1,
-          tension: 100,
-          friction: 6,
-          useNativeDriver: true,
-        }),
-        Animated.timing(popupOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, 800);
-
-    setTimeout(() => setShowParticles(false), 2000);
-  };
-
-  const handleSwipe = (direction, choice) => {
+  const handleSwipe = (direction: string, choice: string) => {
     // Success vibration
     Vibration.vibrate(200);
 
@@ -515,7 +679,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
     });
   };
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -611,7 +775,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
           ]}
         >
           <LinearGradient
-            colors={[...league?.gradient || ['#667eea', '#764ba2'], 'rgba(0,0,0,0.3)']}
+            colors={[...(league?.gradient || ['#667eea', '#764ba2']), 'rgba(0,0,0,0.3)'] as [string, string, string]}
             style={gameStyles.matchGradient}
           >
             <View style={gameStyles.matchOverlay}>
@@ -629,7 +793,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                     }
                   ]}
                 >
-                  <Ionicons name={league?.image} size={48} color="#ffffff" />
+                  <Ionicons name={league?.image as any} size={48} color="#ffffff" />
                 </Animated.View>
                 <Text style={gameStyles.matchStatus}>CHAMPIONSHIP FINAL</Text>
               </View>
@@ -644,27 +808,30 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
             style={gameStyles.scoreGradient}
           >
             <View style={gameStyles.teamScore}>
+              {/* Falcons */}
               <View style={gameStyles.team}>
                 <Text style={gameStyles.teamFlag}>{matchData.homeTeam.flag}</Text>
-                <Text style={gameStyles.teamName}>BRAZIL</Text>
-                <Text style={gameStyles.teamRecord}>12-2-1</Text>
+                <Text style={gameStyles.teamName}>{matchData.homeTeam.name.toUpperCase()}</Text>
               </View>
+
+              {/* Score + Clock */}
               <View style={gameStyles.scoreDisplay}>
                 <Text style={gameStyles.score}>
                   {matchData.homeTeam.score} - {matchData.awayTeam.score}
                 </Text>
                 <View style={gameStyles.matchInfo}>
-                  <Text style={gameStyles.matchTime}>78' • 2nd Half</Text>
+                  <Text style={gameStyles.matchTime}>{matchData.clock}</Text>
                   <View style={gameStyles.stadium}>
                     <Ionicons name="location" size={12} color="rgba(255,255,255,0.6)" />
-                    <Text style={gameStyles.stadiumText}>Maracanã</Text>
+                    <Text style={gameStyles.stadiumText}>Mercedes-Benz Stadium</Text>
                   </View>
                 </View>
               </View>
+
+              {/* Buccaneers */}
               <View style={gameStyles.team}>
                 <Text style={gameStyles.teamFlag}>{matchData.awayTeam.flag}</Text>
-                <Text style={gameStyles.teamName}>ARGENTINA</Text>
-                <Text style={gameStyles.teamRecord}>10-3-2</Text>
+                <Text style={gameStyles.teamName}>{matchData.awayTeam.name.toUpperCase()}</Text>
               </View>
             </View>
           </LinearGradient>
@@ -696,9 +863,9 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
             <Text style={gameStyles.pastBetsTitle}>Recent Micro Bets</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={gameStyles.betsScroll}>
-            {pastBets.map((bet, index) => (
+            {previousMicroBets.map((bet, index) => (
               <Animated.View
-                key={bet.id}
+                key={index}
                 style={[
                   gameStyles.betCard,
                   {
@@ -712,36 +879,36 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                 ]}
               >
                 <LinearGradient
-                  colors={bet.result === 'won' 
-                    ? ['rgba(34, 197, 94, 0.3)', 'rgba(34, 197, 94, 0.1)'] 
+                  colors={bet.status === 'closed' 
+                    ? ['rgba(34, 197, 94, 0.3)', 'rgba(34, 197, 94, 0.1)']
                     : ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']}
                   style={gameStyles.betCardGradient}
                 >
                   <View style={gameStyles.betHeader}>
                     <View style={gameStyles.betStatus}>
                       <Ionicons 
-                        name={bet.result === 'won' ? 'checkmark-circle' : 'close-circle'} 
+                        name={bet.answer ? 'checkmark-circle' : 'help-circle'} 
                         size={16} 
-                        color={bet.result === 'won' ? '#22c55e' : '#ef4444'} 
+                        color={bet.answer ? '#22c55e' : '#ef4444'} 
                       />
                       <Text style={[
                         gameStyles.betResult,
-                        { color: bet.result === 'won' ? '#22c55e' : '#ef4444' }
+                        { color: bet.answer ? '#22c55e' : '#ef4444' }
                       ]}>
-                        {bet.result === 'won' ? 'Won' : 'Lost'}
+                        {bet.answer ? 'Resolved' : 'Pending'}
                       </Text>
                     </View>
-                    <Text style={[
-                      gameStyles.betAmount,
-                      { color: bet.result === 'won' ? '#22c55e' : '#ef4444' }
-                    ]}>
-                      {bet.amount}
-                    </Text>
                   </View>
-                  <Text style={gameStyles.betDescription}>{bet.description}</Text>
-                  <Text style={gameStyles.betChoice}>Your pick: {bet.choice}</Text>
+                  <Text style={gameStyles.betDescription}>{bet.question}</Text>
+                  {bet.answer && bet.options?.length > 0 && (
+                  <Text style={gameStyles.betChoice}>
+                    Winning Option: {bet.options.find(opt => opt.id === bet.answer)?.text || "Unknown"}
+                  </Text>
+                )}
                   <View style={gameStyles.betFooter}>
-                    <Text style={gameStyles.betTime}>2 min ago</Text>
+                    <Text style={gameStyles.betTime}>
+                      {new Date(bet.createdAt?.seconds * 1000).toLocaleTimeString()}
+                    </Text>
                     <TouchableOpacity style={gameStyles.shareButton}>
                       <Ionicons name="share-outline" size={12} color="rgba(255,255,255,0.6)" />
                     </TouchableOpacity>
@@ -856,7 +1023,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
               <View style={gameStyles.optionsContainer}>
                 <TouchableOpacity
                   style={gameStyles.optionButton}
-                  onPress={() => handleSwipe('left', currentMicroBet?.optionA)}
+                  onPress={() => handleSwipe('left', currentMicroBet?.optionA || '')}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
@@ -878,7 +1045,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                 
                 <TouchableOpacity
                   style={gameStyles.optionButton}
-                  onPress={() => handleSwipe('right', currentMicroBet?.optionB)}
+                  onPress={() => handleSwipe('right', currentMicroBet?.optionB || '')}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
@@ -911,9 +1078,9 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
 // Main HomeScreen Component
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const [selectedLeague, setSelectedLeague] = useState(null);
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
 
-  const handleLeaguePress = (leagueId) => {
+  const handleLeaguePress = (leagueId: string) => {
     setSelectedLeague(leagueId);
   };
 
@@ -962,7 +1129,7 @@ export default function HomeScreen() {
             activeOpacity={0.9}
           >
             <LinearGradient
-              colors={league.gradient}
+              colors={league.gradient as any}
               style={styles.cardGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -970,7 +1137,7 @@ export default function HomeScreen() {
               <View style={styles.cardContent}>
                 <View style={styles.iconContainer}>
                   <Ionicons
-                    name={league.image}
+                    name={league.image as any}
                     size={60}
                     color="#FFFFFF"
                   />
