@@ -4,10 +4,10 @@ dist/
 web-build/
 
 # Metro
-metro.config.js
-metro.config.ts
+# Ignore Metro cache directories
 .metro/
 .metro-cache/
+metro-cache/
 
 # Dependencies
 node_modules/
