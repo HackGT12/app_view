@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { doc, getDoc, updateDoc, increment, collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 
@@ -31,13 +31,32 @@ export default function Testing() {
   const [previousMicroBets, setPreviousMicroBets] = useState<MicroBetData[]>([]);
   const [isBetClosed, setIsBetClosed] = useState(false);
 
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchMicroBetData = async (betId: string) => {
     try {
       const docRef = doc(db, 'microBets', betId);
       const docSnap = await getDoc(docRef);
-      
+  
       if (docSnap.exists()) {
-        setMicroBetData(docSnap.data() as MicroBetData);
+        const data = docSnap.data() as MicroBetData;
+  
+        // 🔑 Ensure options is always an array
+        let normalizedOptions: MicroBetOption[] = [];
+        if (Array.isArray(data.options)) {
+          normalizedOptions = data.options;
+        } else if (data.options && typeof data.options === 'object') {
+          normalizedOptions = Object.keys(data.options).map((key) => ({
+            id: key,
+            ...(data.options as any)[key],
+          }));
+        }
+  
+        setMicroBetData({
+          ...data,
+          options: normalizedOptions,
+        });
         setIsBetClosed(false);
         setHasVoted(false);
       }
@@ -51,11 +70,11 @@ export default function Testing() {
       const q = query(collection(db, 'microBets'), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
       const bets: MicroBetData[] = [];
-      
+
       querySnapshot.forEach((doc) => {
         bets.push(doc.data() as MicroBetData);
       });
-      
+
       setPreviousMicroBets(bets);
     } catch (error) {
       console.error('Error loading previous micro bets:', error);
@@ -64,21 +83,26 @@ export default function Testing() {
 
   const handleVote = async (optionId: string) => {
     if (!activeMicroBetId || hasVoted || isBetClosed) return;
-    
+  
+    // 🔒 lock immediately
+    setHasVoted(true);
+  
     try {
       const docRef = doc(db, 'microBets', activeMicroBetId);
       const optionIndex = microBetData?.options.findIndex(opt => opt.id === optionId);
-      
+  
       if (optionIndex !== undefined && optionIndex >= 0) {
         await updateDoc(docRef, {
           [`options.${optionIndex}.votes`]: increment(1)
         });
-        
-        setHasVoted(true);
+  
+        // Refresh from server
         fetchMicroBetData(activeMicroBetId);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to submit vote');
+      // 🔓 unlock if it failed
+      setHasVoted(false);
     }
   };
 
@@ -87,19 +111,23 @@ export default function Testing() {
     return microBetData.options.find(opt => opt.id === microBetData.answer);
   };
 
-  useEffect(() => {
-    loadPreviousMicroBets();
-    
-    const ws = new WebSocket('ws://16.56.9.190:8080');
+  // --- WebSocket with auto-reconnect ---
+  const connectWebSocket = () => {
+    const ws = new WebSocket('ws://10.136.7.78:8080'); // 👈 replace with your server IP
+    wsRef.current = ws;
 
     ws.onopen = () => {
       setConnectionStatus('Connected');
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
     };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       setMessages(prev => [...prev, event.data]);
-      
+
       if (data.activeMicroBetId === null) {
         setIsBetClosed(true);
         setActiveMicroBetId(null);
@@ -111,13 +139,32 @@ export default function Testing() {
 
     ws.onclose = () => {
       setConnectionStatus('Disconnected');
+      scheduleReconnect();
     };
 
     ws.onerror = () => {
       setConnectionStatus('Error');
+      ws.close(); // force trigger onclose
     };
+  };
 
-    return () => ws.close();
+  const scheduleReconnect = () => {
+    if (!reconnectTimer.current) {
+      reconnectTimer.current = setTimeout(() => {
+        console.log('🔄 Attempting to reconnect...');
+        connectWebSocket();
+      }, 5000); // retry after 5s
+    }
+  };
+
+  useEffect(() => {
+    loadPreviousMicroBets();
+    connectWebSocket();
+
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    };
   }, []);
 
   return (
@@ -126,21 +173,21 @@ export default function Testing() {
       <Text style={[styles.status, { color: connectionStatus === 'Connected' ? '#4CAF50' : '#F44336' }]}>
         Status: {connectionStatus}
       </Text>
-      
+
       {microBetData && (
         <View style={styles.microBetContainer}>
           <Text style={styles.question}>{microBetData.question}</Text>
           <Text style={styles.description}>{microBetData.actionDescription}</Text>
           <Text style={styles.sponsor}>Sponsored by: {microBetData.sponsor}</Text>
           <Text style={styles.donation}>Donation: ${microBetData.donation} / ${microBetData.maxDonation}</Text>
-          
+
           {isBetClosed && getWinnerOption() ? (
             <View style={styles.winnerContainer}>
               <Text style={styles.winnerText}>Winner: {getWinnerOption()?.text}</Text>
             </View>
           ) : (
             <View style={styles.optionsContainer}>
-              {microBetData.options.map((option) => (
+              {microBetData.options?.map((option) => (
                 <TouchableOpacity
                   key={option.id}
                   style={[styles.optionButton, hasVoted && styles.disabledButton]}
@@ -155,7 +202,7 @@ export default function Testing() {
           )}
         </View>
       )}
-      
+
       <ScrollView style={styles.messageContainer}>
         {messages.map((msg, idx) => (
           <Text key={idx} style={styles.message}>{msg}</Text>
