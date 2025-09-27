@@ -29,7 +29,7 @@ export const realtimeDb = getDatabase(app);
 
 // Initialize Analytics only if supported
 let analytics: any = null;
-isSupported().then((supported) => {
+isSupported().then((supported: boolean) => {
   if (supported) {
     analytics = getAnalytics(app);
   }
