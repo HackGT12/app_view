@@ -1,183 +1,196 @@
-// app/teams.tsx
+// app/TeamsScreen.tsx
 import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, TextInput, Button, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, getDoc, collection, addDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  updateDoc,
+  arrayUnion,
+  setDoc,
+} from "firebase/firestore";
 
-// ⚡ Make sure Firebase is initialized in your project already
-// (firebase/app + firebase/auth + firebase/firestore)
+const TeamsScreen: React.FC = () => {
+  const auth = getAuth();
+  const db = getFirestore();
+  const user = auth.currentUser;
 
-export default function TeamsScreen() {
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTeamName, setNewTeamName] = useState("");
+  const [joinTeamId, setJoinTeamId] = useState("");
 
-  const auth = getAuth();
-  const db = getFirestore();
-
+  // Fetch teams the user is in
   useEffect(() => {
     const fetchTeams = async () => {
+      if (!user) return;
       try {
-        const user = auth.currentUser;
-        if (!user) return;
-
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          const teamIds = userData.teams || [];
+          const teamIds: string[] = userData.teams || [];
 
-          const fetchedTeams: any[] = [];
-          for (const id of teamIds) {
-            const teamRef = doc(db, "teams", id);
+          const fetchedTeams = [];
+          for (const teamId of teamIds) {
+            const teamRef = doc(db, "teams", teamId);
             const teamSnap = await getDoc(teamRef);
             if (teamSnap.exists()) {
-              fetchedTeams.push({ id: teamSnap.id, ...teamSnap.data() });
+              fetchedTeams.push({ id: teamId, ...teamSnap.data() });
             }
           }
           setTeams(fetchedTeams);
         }
-      } catch (error) {
-        console.error("Error fetching teams:", error);
+      } catch (err) {
+        console.error("Error fetching teams:", err);
       } finally {
         setLoading(false);
       }
     };
 
     fetchTeams();
-  }, []);
+  }, [user]);
 
   const handleCreateTeam = async () => {
-    if (!newTeamName.trim()) return;
+    if (!user || !newTeamName.trim()) return;
 
     try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      // Create team doc
-      const teamRef = await addDoc(collection(db, "teams"), {
+      const teamRef = doc(db, "teams", `${Date.now()}_${user.uid}`);
+      await setDoc(teamRef, {
         name: newTeamName,
         createdBy: user.uid,
         members: [user.uid],
-        createdAt: new Date(),
       });
 
-      // Add team ID to user doc
       const userRef = doc(db, "users", user.uid);
       await updateDoc(userRef, {
         teams: arrayUnion(teamRef.id),
       });
 
-      // Update local state
-      setTeams((prev) => [...prev, { id: teamRef.id, name: newTeamName, createdBy: user.uid }]);
+      setTeams((prev) => [...prev, { id: teamRef.id, name: newTeamName }]);
       setNewTeamName("");
-    } catch (error) {
-      console.error("Error creating team:", error);
+    } catch (err) {
+      console.error("Error creating team:", err);
+    }
+  };
+
+  const handleJoinTeam = async () => {
+    if (!user || !joinTeamId.trim()) return;
+
+    try {
+      const teamRef = doc(db, "teams", joinTeamId);
+      const teamSnap = await getDoc(teamRef);
+
+      if (teamSnap.exists()) {
+        await updateDoc(teamRef, {
+          members: arrayUnion(user.uid),
+        });
+
+        const userRef = doc(db, "users", user.uid);
+        await updateDoc(userRef, {
+          teams: arrayUnion(joinTeamId),
+        });
+
+        setTeams((prev) => [...prev, { id: joinTeamId, ...teamSnap.data() }]);
+        setJoinTeamId("");
+      } else {
+        alert("Team not found.");
+      }
+    } catch (err) {
+      console.error("Error joining team:", err);
     }
   };
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#EFF6E0" />
+      <View style={styles.container}>
+        <Text style={styles.loadingText}>Loading teams...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Your Teams</Text>
-
+      <Text style={styles.header}>Your Teams</Text>
       <FlatList
         data={teams}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.teamCard}>
             <Text style={styles.teamName}>{item.name}</Text>
-            <Text style={styles.teamMeta}>Created by: {item.createdBy}</Text>
+            <Text style={styles.teamId}>ID: {item.id}</Text>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.emptyText}>You’re not in any teams yet.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>You’re not in any teams yet.</Text>
+        }
       />
 
-      <View style={styles.newTeamContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter team name"
-          placeholderTextColor="#598392"
-          value={newTeamName}
-          onChangeText={setNewTeamName}
-        />
-        <TouchableOpacity style={styles.button} onPress={handleCreateTeam}>
-          <Text style={styles.buttonText}>Create Team</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Create a Team */}
+      <Text style={styles.header}>Create a Team</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Team Name"
+        value={newTeamName}
+        onChangeText={setNewTeamName}
+      />
+      <TouchableOpacity style={styles.button} onPress={handleCreateTeam}>
+        <Text style={styles.buttonText}>Create Team</Text>
+      </TouchableOpacity>
+
+      {/* Join a Team */}
+      <Text style={styles.header}>Join a Team</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter Team ID"
+        value={joinTeamId}
+        onChangeText={setJoinTeamId}
+      />
+      <TouchableOpacity style={styles.button} onPress={handleJoinTeam}>
+        <Text style={styles.buttonText}>Join Team</Text>
+      </TouchableOpacity>
     </View>
   );
-}
+};
+
+export default TeamsScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#01161E",
-    padding: 20,
-  },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#01161E",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#EFF6E0",
-    marginBottom: 20,
-  },
-  teamCard: {
-    backgroundColor: "#124559",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
+  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
+  header: { fontSize: 20, fontWeight: "600", marginTop: 20, marginBottom: 10 },
+  loadingText: { textAlign: "center", marginTop: 50, fontSize: 16 },
+  emptyText: { textAlign: "center", marginTop: 20, color: "#777" },
+  input: {
     borderWidth: 1,
-    borderColor: "#598392",
-  },
-  teamName: {
-    color: "#EFF6E0",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  teamMeta: {
-    color: "#AEC3B0",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  emptyText: {
-    color: "#598392",
-    textAlign: "center",
-    marginTop: 40,
+    borderColor: "#ccc",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
     fontSize: 16,
   },
-  newTeamContainer: {
-    marginTop: 20,
+  button: {
+    backgroundColor: "#007AFF",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 20,
   },
-  input: {
-    borderColor: "#598392",
-    borderWidth: 1,
+  buttonText: { color: "#fff", fontSize: 16, fontWeight: "500" },
+  teamCard: {
+    padding: 16,
+    backgroundColor: "#f5f5f5",
     borderRadius: 10,
-    padding: 10,
-    color: "#EFF6E0",
     marginBottom: 10,
   },
-  button: {
-    backgroundColor: "#598392",
-    padding: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#EFF6E0",
-    fontWeight: "600",
-  },
+  teamName: { fontSize: 18, fontWeight: "500" },
+  teamId: { fontSize: 14, color: "#666", marginTop: 4 },
 });
