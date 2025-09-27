@@ -51,7 +51,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="chatbot"
           options={{
-            title: 'Chat',
+            title: 'Side Guide',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="chatbubble" size={size} color={color} />
             ),
@@ -63,6 +63,15 @@ export default function TabLayout() {
             title: 'Profile',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="person" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="testing"
+          options={{
+            title: 'Testing',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="flask" size={size} color={color} />
             ),
           }}
         />

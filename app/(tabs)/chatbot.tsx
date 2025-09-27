@@ -13,6 +13,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getKnowledgeBase } from '../../utils/sportsKnowledgeBase';
+
 
 const { width } = Dimensions.get('window');
 
@@ -63,37 +65,67 @@ export default function ChatbotScreen() {
   const [inputText, setInputText] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>(MODEL_OPTIONS[0]);
   const [showModelPicker, setShowModelPicker] = useState<boolean>(false);
+  const [chatId] = useState<string>(() => Date.now().toString());
 
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const generateResponse = (userMessage: string): string => {
-    const message = userMessage.toLowerCase();
+  const generateResponse = async (userMessage: string): Promise<string> => {
+    console.log('🚀 Starting OpenAI request for:', userMessage);
+    console.log('🔑 API Key exists:', !!process.env.EXPO_PUBLIC_OPENAI_API_KEY);
+    console.log('🔑 API Key first 10 chars:', process.env.EXPO_PUBLIC_OPENAI_API_KEY?.substring(0, 10));
+    
+    try {
+      const requestBody = {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a helpful side guide for a charity betting app. Keep responses concise and friendly. Context for ${selectedModel}: ${getKnowledgeBase(selectedModel)}`
+          },
+          {
+            role: 'user',
+            content: userMessage
+          }
+        ],
+        max_tokens: 150,
+      };
+      
+      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-    if (message.includes('hi') || message.includes('hello') || message.includes('hey')) {
-      return BEGINNER_RESPONSES.greeting;
+      console.log('📥 Response status:', response.status);
+      console.log('📥 Response ok:', response.ok);
+      
+      const data = await response.json();
+      console.log('📥 Response data:', JSON.stringify(data, null, 2));
+      
+      if (!response.ok) {
+        console.error('❌ API Error:', data);
+        return `API Error: ${data.error?.message || 'Unknown error'}`;
+      }
+      
+      const content = data.choices?.[0]?.message?.content;
+      console.log('✅ Final response:', content);
+      
+      return content || 'Sorry, I had trouble understanding that. Could you try rephrasing?';
+    } catch (error) {
+      console.error('❌ OpenAI API error:', error);
+      return 'Sorry, I\'m having trouble connecting right now. Please try again later.';
     }
-
-    if (message.includes('bet') || message.includes('betting') || message.includes('how')) {
-      return BEGINNER_RESPONSES.betting;
-    }
-
-    if (message.includes('rule') || message.includes('work') || message.includes('play')) {
-      return BEGINNER_RESPONSES.rules;
-    }
-
-    if (message.includes('charity') || message.includes('money') || message.includes('sponsor')) {
-      return BEGINNER_RESPONSES.charity;
-    }
-
-    if (message.includes('coin') || message.includes('point') || message.includes('score')) {
-      return BEGINNER_RESPONSES.coins;
-    }
-
-    return BEGINNER_RESPONSES.default;
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (inputText.trim()) {
+      console.log('💬 Sending message:', inputText.trim());
+      
       const userMessage: Message = {
         id: Date.now().toString(),
         text: inputText.trim(),
@@ -105,17 +137,19 @@ export default function ChatbotScreen() {
       const textForResponse = inputText.trim();
       setInputText('');
 
-      // Simulate bot response delay
-      setTimeout(() => {
-        const botResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: generateResponse(textForResponse),
-          isUser: false,
-          timestamp: new Date(),
-        };
+      // Get OpenAI response
+      console.log('⏳ Getting OpenAI response...');
+      const responseText = await generateResponse(textForResponse);
+      console.log('✅ Got response, adding to messages');
+      
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: responseText,
+        isUser: false,
+        timestamp: new Date(),
+      };
 
-        setMessages((prev) => [...prev, botResponse]);
-      }, 1000);
+      setMessages((prev) => [...prev, botResponse]);
     }
   };
 
@@ -142,7 +176,7 @@ export default function ChatbotScreen() {
           <Ionicons name="chatbubble-ellipses" size={24} color="#EFF6E0" />
         </View>
         <View style={styles.headerText}>
-          <Text style={styles.botName}>Sports Betting Assistant</Text>
+          <Text style={styles.botName}>Side Guide</Text>
           <Text style={styles.botStatus}>Online • {selectedModel}</Text>
         </View>
 
