@@ -4,10 +4,10 @@ dist/
 web-build/
 
 # Metro
-metro.config.js
-metro.config.ts
+# Ignore Metro cache directories
 .metro/
 .metro-cache/
+metro-cache/
 
 # Dependencies
 node_modules/
@@ -43,3 +43,8 @@ Thumbs.db
 
 expo-env.d.ts
 # @end expo-cli
+
+# Ignore package files and babel config (prevent accidental commits of lockfile and config changes)
+package-lock.json
+package.json
+babel.config.js
