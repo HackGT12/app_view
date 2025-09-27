@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
+  Dimensions,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -21,6 +22,8 @@ import {
   updateDoc,
   getDoc,
 } from 'firebase/firestore';
+
+const { width } = Dimensions.get('window');
 
 interface GroupLine {
   id: string;
@@ -81,17 +84,15 @@ export default function TeamDetail() {
       const groupLine = groupLines.find(gl => gl.id === lineId);
       if (!groupLine) return;
       
-      // Determine actual score based on question (simplified - assumes team1/team2 mapping)
       const actualScore = groupLine.question.includes('team 1') ? actualScores.homeTeamScore : actualScores.awayTeamScore;
       if (actualScore === undefined) return;
       
-      // Check if prediction was correct
       const wasCorrect = (bet.type === 'over' && actualScore > bet.line) || 
                         (bet.type === 'under' && actualScore < bet.line);
       
       if (wasCorrect) {
         const distance = Math.abs(actualScore - bet.line);
-        const points = Math.max(5, 30 - distance); // Minimum 5 points
+        const points = Math.max(5, 30 - distance);
         totalScore += points;
       }
     });
@@ -103,7 +104,6 @@ export default function TeamDetail() {
     fetchGroupLines();
     fetchTeamData();
     
-    // WebSocket connection
     const ws = new WebSocket('ws://10.136.7.78:8080');
 
     ws.onopen = () => {
@@ -113,7 +113,6 @@ export default function TeamDetail() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
       
-      // Look for team scores in the WebSocket data
       if (data.homeTeamScore !== undefined || data.awayTeamScore !== undefined) {
         setGameScores({
           homeTeamScore: data.homeTeamScore,
@@ -164,7 +163,6 @@ export default function TeamDetail() {
         const responses = data.playerResponses?.[user.uid] || {};
         setPlayerResponses(responses);
         
-        // Fetch real user names
         const memberPromises = data.members.map(async (memberId) => {
           try {
             const userRef = doc(db, 'users', memberId);
@@ -174,7 +172,7 @@ export default function TeamDetail() {
             return {
               id: memberId,
               name: userData?.name || 'Unknown User',
-              score: 0, // Will be calculated based on actual bets later
+              score: 0,
               isOwner: memberId === data.createdBy
             };
           } catch (error) {
@@ -196,7 +194,6 @@ export default function TeamDetail() {
     }
   };
 
-  // Update member scores when game scores change
   useEffect(() => {
     if (!teamData || (gameScores.homeTeamScore === undefined && gameScores.awayTeamScore === undefined)) return;
     
@@ -210,7 +207,6 @@ export default function TeamDetail() {
       };
     });
     
-    // Sort by score descending
     updatedMembers.sort((a, b) => b.score - a.score);
     setMembers(updatedMembers);
   }, [gameScores, teamData, groupLines]);
@@ -250,15 +246,6 @@ export default function TeamDetail() {
     }
   };
 
-  const initializeSliderValue = (lineId: string, min: number, max: number) => {
-    if (!customLines[lineId]) {
-      setCustomLines(prev => ({
-        ...prev,
-        [lineId]: Math.round((min + max) / 2)
-      }));
-    }
-  };
-
   if (!selectedGame) {
     return (
       <View style={styles.container}>
@@ -270,41 +257,53 @@ export default function TeamDetail() {
         </View>
 
         <View style={styles.gameSelectionContainer}>
-          <Text style={styles.gameSelectionTitle}>Select Game</Text>
+          <Text style={styles.gameSelectionTitle}>Select Your Game</Text>
+          <Text style={styles.gameSelectionSubtitle}>Choose a live match to start betting</Text>
           
           <TouchableOpacity 
             style={styles.gameCard}
             onPress={() => setSelectedGame('falcons-bucks')}
           >
+            <View style={styles.liveIndicator}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
+            
             <View style={styles.gameHeader}>
               <Text style={styles.gameDate}>Today • 8:00 PM EST</Text>
-              <Text style={styles.gameStatus}>LIVE</Text>
+              <Text style={styles.gameLeague}>NFL</Text>
             </View>
             
             <View style={styles.teamsContainer}>
               <View style={styles.teamSection}>
+                <Text style={styles.teamLogo}>🦅</Text>
                 <Text style={styles.teamName}>Atlanta Falcons</Text>
                 <Text style={styles.homeIndicator}>HOME</Text>
               </View>
               
-              <Text style={styles.vsText}>VS</Text>
+              <View style={styles.vsContainer}>
+                <Text style={styles.vsText}>VS</Text>
+              </View>
               
               <View style={styles.teamSection}>
+                <Text style={styles.teamLogo}>🏴‍☠️</Text>
                 <Text style={styles.teamName}>Tampa Bay Buccaneers</Text>
                 <Text style={styles.awayIndicator}>AWAY</Text>
               </View>
             </View>
             
             <View style={styles.gameFooter}>
-              <Text style={styles.gameType}>NFL Regular Season</Text>
-              <Text style={styles.enterText}>Tap to Enter →</Text>
+              <Text style={styles.enterText}>Tap to Enter Betting →</Text>
             </View>
           </TouchableOpacity>
           
-          <View style={styles.unavailableGames}>
-            <Text style={styles.unavailableTitle}>Coming Soon</Text>
-            <View style={styles.unavailableCard}>
-              <Text style={styles.unavailableText}>More games will be available soon!</Text>
+          <View style={styles.comingSoonContainer}>
+            <Text style={styles.comingSoonTitle}>More Games Coming Soon</Text>
+            <View style={styles.comingSoonCard}>
+              <Text style={styles.comingSoonIcon}>⏰</Text>
+              <Text style={styles.comingSoonText}>
+                We're adding more live games and sports. Stay tuned for updates!
+              </Text>
             </View>
           </View>
         </View>
@@ -318,7 +317,21 @@ export default function TeamDetail() {
         <TouchableOpacity onPress={() => setSelectedGame(null)} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Falcons vs Buccaneers</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Falcons vs Buccaneers</Text>
+          <View style={styles.connectionBadge}>
+            <View style={[
+              styles.connectionDot,
+              { backgroundColor: connectionStatus === 'Connected' ? '#22C55E' : '#EF4444' }
+            ]} />
+            <Text style={[
+              styles.connectionText,
+              { color: connectionStatus === 'Connected' ? '#22C55E' : '#EF4444' }
+            ]}>
+              {connectionStatus}
+            </Text>
+          </View>
+        </View>
       </View>
 
       <View style={styles.tabContainer}>
@@ -327,7 +340,7 @@ export default function TeamDetail() {
           onPress={() => setActiveTab('bets')}
         >
           <Text style={[styles.tabText, activeTab === 'bets' && styles.activeTabText]}>
-            Bets
+            🎯 Live Bets
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -335,69 +348,75 @@ export default function TeamDetail() {
           onPress={() => setActiveTab('members')}
         >
           <Text style={[styles.tabText, activeTab === 'members' && styles.activeTabText]}>
-            Members
+            🏆 Leaderboard
           </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {loading ? (
-          <Text style={styles.loadingText}>Loading...</Text>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingEmoji}>⚡</Text>
+            <Text style={styles.loadingText}>Loading bets...</Text>
+          </View>
         ) : activeTab === 'bets' ? (
-          <View style={styles.gameSection}>
-            <Text style={styles.gameTitle}>Active Bets</Text>
+          <View style={styles.betsSection}>
+            <Text style={styles.sectionTitle}>Active Live Bets</Text>
             
-            <View style={styles.betsContainer}>
-              {groupLines.map((groupLine) => {
-                const playerResponse = playerResponses[groupLine.id];
-                const hasAnswered = !!playerResponse;
-                
-                return (
-                  <View key={groupLine.id} style={styles.betCard}>
+            {groupLines.map((groupLine) => {
+              const playerResponse = playerResponses[groupLine.id];
+              const hasAnswered = !!playerResponse;
+              
+              return (
+                <View key={groupLine.id} style={styles.betCard}>
+                  <View style={styles.betCardHeader}>
                     <Text style={styles.questionText}>{groupLine.question}</Text>
-                    
-                    {hasAnswered ? (
-                      <View style={styles.answeredContainer}>
-                        <Text style={styles.answeredText}>
-                          ✓ Your bet: {playerResponse.type.toUpperCase()} {playerResponse.line}
-                        </Text>
+                    <Text style={styles.rangeText}>Range: {groupLine.min} - {groupLine.max}</Text>
+                  </View>
+                  
+                  {hasAnswered ? (
+                    <View style={styles.answeredContainer}>
+                      <View style={styles.answeredBadge}>
+                        <Text style={styles.checkmark}>✓</Text>
                       </View>
-                    ) : (
-                      <View>
-                        <View style={styles.optionsContainer}>
-                          <TouchableOpacity
-                            style={[
-                              styles.optionButton,
-                              selectedTypes[groupLine.id] === 'over' && styles.selectedOption
-                            ]}
-                            onPress={() => setSelectedTypes(prev => ({
-                              ...prev,
-                              [groupLine.id]: 'over'
-                            }))}
-                          >
-                            <Text style={[
-                              styles.optionText,
-                              selectedTypes[groupLine.id] === 'over' && styles.selectedOptionText
-                            ]}>Over</Text>
-                          </TouchableOpacity>
-                          
-                          <TouchableOpacity
-                            style={[
-                              styles.optionButton,
-                              selectedTypes[groupLine.id] === 'under' && styles.selectedOption
-                            ]}
-                            onPress={() => setSelectedTypes(prev => ({
-                              ...prev,
-                              [groupLine.id]: 'under'
-                            }))}
-                          >
-                            <Text style={[
-                              styles.optionText,
-                              selectedTypes[groupLine.id] === 'under' && styles.selectedOptionText
-                            ]}>Under</Text>
-                          </TouchableOpacity>
-                        </View>
+                      <Text style={styles.answeredText}>
+                        Your bet: {playerResponse.type.toUpperCase()} {playerResponse.line}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.bettingInterface}>
+                      <View style={styles.optionsContainer}>
+                        <TouchableOpacity
+                          style={[
+                            styles.optionButton,
+                            styles.overButton,
+                            selectedTypes[groupLine.id] === 'over' && styles.selectedOver
+                          ]}
+                          onPress={() => setSelectedTypes(prev => ({
+                            ...prev,
+                            [groupLine.id]: 'over'
+                          }))}
+                        >
+                          <Text style={styles.optionLabel}>OVER</Text>
+                        </TouchableOpacity>
                         
+                        <TouchableOpacity
+                          style={[
+                            styles.optionButton,
+                            styles.underButton,
+                            selectedTypes[groupLine.id] === 'under' && styles.selectedUnder
+                          ]}
+                          onPress={() => setSelectedTypes(prev => ({
+                            ...prev,
+                            [groupLine.id]: 'under'
+                          }))}
+                        >
+                          <Text style={styles.optionLabel}>UNDER</Text>
+                        </TouchableOpacity>
+                      </View>
+                      
+                      <View style={styles.sliderSection}>
+                        <Text style={styles.sliderLabel}>Set Your Line</Text>
                         <View style={styles.sliderContainer}>
                           <Slider
                             style={styles.slider}
@@ -411,81 +430,139 @@ export default function TeamDetail() {
                               }));
                             }}
                             step={1}
-                            minimumTrackTintColor="#598392"
-                            maximumTrackTintColor="#AEC3B0"
+                            minimumTrackTintColor="#00F5FF"
+                            maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
                             thumbStyle={styles.sliderThumb}
                           />
-                          <TextInput
-                            style={styles.numberInput}
-                            value={String(customLines[groupLine.id] || Math.round((groupLine.min + groupLine.max) / 2))}
-                            onChangeText={(text) => {
-                              const value = parseInt(text) || groupLine.min;
-                              if (value >= groupLine.min && value <= groupLine.max) {
-                                setCustomLines(prev => ({
-                                  ...prev,
-                                  [groupLine.id]: value
-                                }));
-                              }
-                            }}
-                            keyboardType="numeric"
-                          />
+                          <View style={styles.numberInputContainer}>
+                            <TextInput
+                              style={styles.numberInput}
+                              value={String(customLines[groupLine.id] || Math.round((groupLine.min + groupLine.max) / 2))}
+                              onChangeText={(text) => {
+                                const value = parseInt(text) || groupLine.min;
+                                if (value >= groupLine.min && value <= groupLine.max) {
+                                  setCustomLines(prev => ({
+                                    ...prev,
+                                    [groupLine.id]: value
+                                  }));
+                                }
+                              }}
+                              keyboardType="numeric"
+                              maxLength={3}
+                            />
+                          </View>
                         </View>
-                        
-                        <TouchableOpacity
-                          style={styles.confirmButton}
-                          onPress={() => handleConfirmBet(groupLine.id)}
-                        >
-                          <Text style={styles.confirmButtonText}>Confirm Bet</Text>
-                        </TouchableOpacity>
                       </View>
-                    )}
-                  </View>
-                );
-              })}
-              
-              {groupLines.length === 0 && (
-                <Text style={styles.noBetsText}>No active bets available</Text>
-              )}
-            </View>
+                      
+                      <TouchableOpacity
+                        style={styles.confirmButton}
+                        onPress={() => handleConfirmBet(groupLine.id)}
+                      >
+                        <Text style={styles.confirmButtonText}>Confirm Bet</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+            
+            {groupLines.length === 0 && (
+              <View style={styles.noBetsContainer}>
+                <Text style={styles.noBetsIcon}>🎲</Text>
+                <Text style={styles.noBetsTitle}>No Active Bets</Text>
+                <Text style={styles.noBetsText}>
+                  Bets will appear here when the game is live
+                </Text>
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.membersSection}>
-            <View style={styles.statusContainer}>
-              <Text style={[styles.connectionStatus, { color: connectionStatus === 'Connected' ? '#4CAF50' : '#F44336' }]}>
-                WebSocket: {connectionStatus}
-              </Text>
-              {gameScores.homeTeamScore !== undefined && (
-                <Text style={styles.scoresText}>
-                  Team 1: {gameScores.homeTeamScore} | Team 2: {gameScores.awayTeamScore || 0}
-                </Text>
-              )}
-            </View>
-            
-            {teamData && (
-              <View style={styles.joinCodeContainer}>
-                <Text style={styles.joinCodeLabel}>Join Code</Text>
-                <Text style={styles.joinCodeValue}>{teamData.joinCode}</Text>
+            {gameScores.homeTeamScore !== undefined && (
+              <View style={styles.liveScoreContainer}>
+                <Text style={styles.liveScoreTitle}>Live Score</Text>
+                <View style={styles.scoreDisplay}>
+                  <View style={styles.scoreTeam}>
+                    <Text style={styles.scoreTeamName}>Falcons</Text>
+                    <Text style={styles.scoreNumber}>{gameScores.homeTeamScore}</Text>
+                  </View>
+                  <Text style={styles.scoreSeparator}>-</Text>
+                  <View style={styles.scoreTeam}>
+                    <Text style={styles.scoreTeamName}>Buccaneers</Text>
+                    <Text style={styles.scoreNumber}>{gameScores.awayTeamScore || 0}</Text>
+                  </View>
+                </View>
               </View>
             )}
             
-            <Text style={styles.leaderboardTitle}>Leaderboard</Text>
-            <View style={styles.leaderboardContainer}>
-              {members.map((member, index) => (
-                <View key={member.id} style={styles.memberCard}>
-                  <View style={styles.memberRank}>
-                    <Text style={styles.rankText}>#{index + 1}</Text>
-                  </View>
-                  <View style={styles.memberInfo}>
-                    <View style={styles.memberNameContainer}>
-                      <Text style={styles.memberName}>{member.name}</Text>
-                      {member.isOwner && (
-                        <Text style={styles.ownerBadge}>★</Text>
-                      )}
-                    </View>
-                    <Text style={styles.memberScore}>{member.score} pts</Text>
+            {teamData && (
+              <View style={styles.teamInfoContainer}>
+                <Text style={styles.teamInfoTitle}>Team Info</Text>
+                <View style={styles.joinCodeDisplay}>
+                  <Text style={styles.joinCodeLabel}>Join Code</Text>
+                  <View style={styles.joinCodeBadge}>
+                    <Text style={styles.joinCodeValue}>{teamData.joinCode}</Text>
                   </View>
                 </View>
-              ))}
+              </View>
+            )}
+            
+            <View style={styles.leaderboardSection}>
+              <Text style={styles.leaderboardTitle}>Live Rankings</Text>
+              <View style={styles.leaderboardContainer}>
+                {members.map((member, index) => (
+                  <View 
+                    key={member.id} 
+                    style={[
+                      styles.memberCard,
+                      index === 0 && styles.firstPlace
+                    ]}
+                  >
+                    <View style={[
+                      styles.memberRank,
+                      index === 0 && styles.firstPlaceRank,
+                      index === 1 && styles.secondPlaceRank,
+                      index === 2 && styles.thirdPlaceRank,
+                    ]}>
+                      <Text style={[
+                        styles.rankText,
+                        index === 0 && styles.firstPlaceRankText
+                      ]}>
+                        {index === 0 ? '👑' : `#${index + 1}`}
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.memberInfo}>
+                      <View style={styles.memberNameContainer}>
+                        <Text style={[
+                          styles.memberName,
+                          index === 0 && styles.firstPlaceName
+                        ]}>
+                          {member.name}
+                        </Text>
+                        {member.isOwner && (
+                          <Text style={styles.ownerBadge}>⭐</Text>
+                        )}
+                      </View>
+                      <Text style={[
+                        styles.memberScore,
+                        index === 0 && styles.firstPlaceScore
+                      ]}>
+                        {member.score} pts
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+                
+                {members.length === 0 && (
+                  <View style={styles.noMembersContainer}>
+                    <Text style={styles.noMembersIcon}>👥</Text>
+                    <Text style={styles.noMembersText}>
+                      No members yet. Share the join code!
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
         )}
@@ -497,7 +574,7 @@ export default function TeamDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#01161E',
+    backgroundColor: '#124559',
   },
   header: {
     flexDirection: 'row',
@@ -507,199 +584,548 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   backButton: {
-    marginRight: 15,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
   },
   backButtonText: {
-    fontSize: 24,
-    color: '#EFF6E0',
+    fontSize: 20,
+    color: '#FFFFFF',
     fontWeight: 'bold',
+  },
+  headerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#EFF6E0',
-    flex: 1,
+    color: '#FFFFFF',
   },
-  content: {
+  connectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  connectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  connectionText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  gameSelectionContainer: {
     flex: 1,
     paddingHorizontal: 20,
   },
-  gameSection: {
-    marginBottom: 30,
-  },
-  gameTitle: {
-    fontSize: 20,
+  gameSelectionTitle: {
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#EFF6E0',
+    color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 5,
+    marginBottom: 8,
   },
-  gameSubtitle: {
+  gameSelectionSubtitle: {
     fontSize: 16,
-    color: '#AEC3B0',
+    color: '#6B7280',
     textAlign: 'center',
+    marginBottom: 40,
+  },
+  gameCard: {
+    backgroundColor: 'rgba(16, 23, 42, 0.8)',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.3)',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22C55E',
+    marginRight: 6,
+  },
+  liveText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#22C55E',
+  },
+  gameHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
   },
-  betsContainer: {
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 15,
+  gameDate: {
+    fontSize: 14,
+    color: '#6B7280',
   },
-  sectionTitle: {
-    fontSize: 18,
+  gameLeague: {
+    fontSize: 12,
+    color: '#00F5FF',
     fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 15,
+    backgroundColor: 'rgba(0, 245, 255, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  betCard: {
-    backgroundColor: '#01161E',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 15,
+  teamsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  teamSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  teamLogo: {
+    fontSize: 32,
+    marginBottom: 8,
   },
   teamName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 5,
-  },
-  lineText: {
-    fontSize: 14,
-    color: '#AEC3B0',
-    marginBottom: 15,
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  optionButton: {
-    flex: 1,
-    backgroundColor: '#598392',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  selectedOption: {
-    backgroundColor: '#4CAF50',
-  },
-  optionText: {
-    color: '#EFF6E0',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  selectedOptionText: {
     color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  sliderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  slider: {
-    flex: 1,
-    height: 40,
-    marginRight: 15,
-  },
-  sliderThumb: {
-    backgroundColor: '#EFF6E0',
-    width: 20,
-    height: 20,
-  },
-  numberInput: {
-    backgroundColor: '#598392',
-    borderRadius: 6,
-    padding: 10,
-    fontSize: 16,
-    color: '#EFF6E0',
     textAlign: 'center',
-    width: 60,
+    marginBottom: 4,
   },
-  confirmButton: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    padding: 14,
+  homeIndicator: {
+    fontSize: 10,
+    color: '#00F5FF',
+    fontWeight: '600',
+    backgroundColor: 'rgba(0, 245, 255, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  awayIndicator: {
+    fontSize: 10,
+    color: '#6B7280',
+    fontWeight: '600',
+    backgroundColor: 'rgba(107, 114, 128, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  vsContainer: {
+    width: 60,
     alignItems: 'center',
   },
-  confirmButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  vsText: {
+    fontSize: 20,
     fontWeight: 'bold',
+    color: '#00F5FF',
+  },
+  gameFooter: {
+    alignItems: 'center',
+  },
+  enterText: {
+    fontSize: 16,
+    color: '#00F5FF',
+    fontWeight: '600',
+  },
+  comingSoonContainer: {
+    marginTop: 20,
+  },
+  comingSoonTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  comingSoonCard: {
+    backgroundColor: 'rgba(16, 23, 42, 0.5)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(107, 114, 128, 0.2)',
+  },
+  comingSoonIcon: {
+    fontSize: 40,
+    marginBottom: 12,
+  },
+  comingSoonText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#124559',
-    borderRadius: 8,
+    backgroundColor: 'rgba(16, 23, 42, 0.8)',
+    borderRadius: 16,
     padding: 4,
+    marginHorizontal: 20,
     marginBottom: 20,
   },
   tab: {
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
-    borderRadius: 6,
+    borderRadius: 12,
   },
   activeTab: {
-    backgroundColor: '#598392',
+    backgroundColor: '#00F5FF',
   },
   tabText: {
     fontSize: 14,
-    color: '#AEC3B0',
-    fontWeight: '500',
+    color: '#6B7280',
+    fontWeight: '600',
   },
   activeTabText: {
-    color: '#EFF6E0',
+    color: '#0A0E27',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  loadingEmoji: {
+    fontSize: 60,
+    marginBottom: 16,
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  betsSection: {
+    paddingBottom: 40,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  betCard: {
+    backgroundColor: 'rgba(16, 23, 42, 0.8)',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.2)',
+  },
+  betCardHeader: {
+    marginBottom: 20,
+  },
+  questionText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  rangeText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  answeredContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+  },
+  answeredBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#22C55E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  checkmark: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  answeredText: {
+    fontSize: 16,
+    color: '#22C55E',
+    fontWeight: '600',
+  },
+  bettingInterface: {
+    gap: 20,
+  },
+  optionsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  optionButton: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  overButton: {
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+  },
+  underButton: {
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  selectedOver: {
+    backgroundColor: 'rgba(34, 197, 94, 0.2)',
+    borderColor: '#22C55E',
+  },
+  selectedUnder: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderColor: '#EF4444',
+  },
+  optionLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  optionIcon: {
+    fontSize: 20,
+  },
+  sliderSection: {
+    gap: 12,
+  },
+  sliderLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  sliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  slider: {
+    flex: 1,
+    height: 40,
+  },
+  sliderThumb: {
+    backgroundColor: '#00F5FF',
+    width: 24,
+    height: 24,
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+  },
+  numberInputContainer: {
+    backgroundColor: 'rgba(0, 245, 255, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#00F5FF',
+  },
+  numberInput: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minWidth: 70,
+  },
+  confirmButton: {
+    backgroundColor: '#00F5FF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  confirmButtonText: {
+    color: '#0A0E27',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  noBetsContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  noBetsIcon: {
+    fontSize: 60,
+    marginBottom: 16,
+  },
+  noBetsTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  noBetsText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
   },
   membersSection: {
+    paddingBottom: 40,
+  },
+  liveScoreContainer: {
+    backgroundColor: 'rgba(16, 23, 42, 0.8)',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+  },
+  liveScoreTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#22C55E',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  scoreDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreTeam: {
+    alignItems: 'center',
     flex: 1,
   },
-  joinCodeContainer: {
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 15,
+  scoreTeamName: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  scoreNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  scoreSeparator: {
+    fontSize: 24,
+    color: '#6B7280',
+    marginHorizontal: 20,
+  },
+  teamInfoContainer: {
+    backgroundColor: 'rgba(16, 23, 42, 0.8)',
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.2)',
+  },
+  teamInfoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  joinCodeDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   joinCodeLabel: {
     fontSize: 14,
-    color: '#AEC3B0',
-    marginBottom: 5,
+    color: '#6B7280',
+  },
+  joinCodeBadge: {
+    backgroundColor: 'rgba(0, 245, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#00F5FF',
   },
   joinCodeValue: {
-    fontSize: 24,
-    color: '#EFF6E0',
-    fontWeight: 'bold',
-  },
-  leaderboardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 15,
+    color: '#00F5FF',
+  },
+  leaderboardSection: {
+    gap: 16,
+  },
+  leaderboardTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   leaderboardContainer: {
-    gap: 10,
+    gap: 12,
   },
   memberCard: {
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 15,
+    backgroundColor: 'rgba(16, 23, 42, 0.8)',
+    borderRadius: 16,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  firstPlace: {
+    borderColor: '#FFD700',
+    backgroundColor: 'rgba(255, 215, 0, 0.1)',
   },
   memberRank: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#598392',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0, 245, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: 16,
+  },
+  firstPlaceRank: {
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+  },
+  secondPlaceRank: {
+    backgroundColor: 'rgba(192, 192, 192, 0.2)',
+  },
+  thirdPlaceRank: {
+    backgroundColor: 'rgba(205, 127, 50, 0.2)',
   },
   rankText: {
-    color: '#EFF6E0',
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#00F5FF',
+  },
+  firstPlaceRankText: {
+    fontSize: 20,
   },
   memberInfo: {
     flex: 1,
@@ -713,177 +1139,36 @@ const styles = StyleSheet.create({
   },
   memberName: {
     fontSize: 16,
-    color: '#EFF6E0',
-    fontWeight: '500',
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  firstPlaceName: {
+    color: '#FFD700',
   },
   ownerBadge: {
-    fontSize: 18,
-    color: '#FFD700',
+    fontSize: 16,
     marginLeft: 8,
   },
   memberScore: {
     fontSize: 16,
-    color: '#AEC3B0',
-    fontWeight: '500',
+    color: '#6B7280',
+    fontWeight: '600',
   },
-  statusContainer: {
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 15,
-  },
-  connectionStatus: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 5,
-  },
-  scoresText: {
-    fontSize: 14,
-    color: '#EFF6E0',
-    fontWeight: '500',
-  },
-  gameSelectionContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  gameSelectionTitle: {
-    fontSize: 24,
+  firstPlaceScore: {
+    color: '#FFD700',
     fontWeight: 'bold',
-    color: '#EFF6E0',
-    textAlign: 'center',
-    marginBottom: 30,
   },
-  gameCard: {
-    backgroundColor: '#124559',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 30,
-  },
-  gameHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  noMembersContainer: {
     alignItems: 'center',
-    marginBottom: 20,
+    paddingTop: 40,
   },
-  gameDate: {
-    fontSize: 14,
-    color: '#AEC3B0',
+  noMembersIcon: {
+    fontSize: 50,
+    marginBottom: 12,
   },
-  gameStatus: {
-    fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: 'bold',
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  teamsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  teamSection: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  teamName: {
+  noMembersText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#EFF6E0',
+    color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 5,
-  },
-  homeIndicator: {
-    fontSize: 12,
-    color: '#598392',
-    fontWeight: '500',
-  },
-  awayIndicator: {
-    fontSize: 12,
-    color: '#AEC3B0',
-    fontWeight: '500',
-  },
-  vsText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#598392',
-    marginHorizontal: 20,
-  },
-  gameFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  gameType: {
-    fontSize: 12,
-    color: '#AEC3B0',
-  },
-  enterText: {
-    fontSize: 14,
-    color: '#598392',
-    fontWeight: '500',
-  },
-  unavailableGames: {
-    marginTop: 20,
-  },
-  unavailableTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#AEC3B0',
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  unavailableCard: {
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 20,
-    opacity: 0.6,
-  },
-  unavailableText: {
-    fontSize: 14,
-    color: '#AEC3B0',
-    textAlign: 'center',
-  },
-  loadingText: {
-    color: '#EFF6E0',
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 50,
-  },
-  questionText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 5,
-  },
-  rangeText: {
-    fontSize: 14,
-    color: '#AEC3B0',
-    marginBottom: 15,
-  },
-  inputLabel: {
-    fontSize: 14,
-    color: '#EFF6E0',
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  answeredContainer: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 6,
-    padding: 12,
-    alignItems: 'center',
-  },
-  answeredText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  noBetsText: {
-    color: '#AEC3B0',
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 20,
   },
 });

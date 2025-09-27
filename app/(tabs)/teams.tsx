@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   ScrollView,
+  Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { getAuth } from 'firebase/auth';
@@ -24,6 +25,8 @@ import {
   where,
   getDocs,
 } from 'firebase/firestore';
+
+const { width } = Dimensions.get('window');
 
 interface Team {
   id: string;
@@ -170,43 +173,101 @@ const TeamsScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading teams...</Text>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingEmoji}>⚡</Text>
+          <Text style={styles.loadingText}>Loading your teams...</Text>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Teams</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Your Teams</Text>
+        <Text style={styles.subtitle}>Connect • Compete • Win</Text>
+      </View>
       
-      <ScrollView style={styles.teamsContainer}>
+      {/* Main Content */}
+      <View style={styles.mainContent}>
         {teams.length === 0 ? (
-          <Text style={styles.emptyText}>You're not in any teams yet.</Text>
+          /* Welcome Section for New Users */
+          <View style={styles.welcomeContainer}>
+            <Text style={styles.welcomeEmoji}>🎯</Text>
+            <Text style={styles.welcomeTitle}>Ready to Start Betting?</Text>
+            <Text style={styles.welcomeText}>
+              Create your own team or join friends to start placing bets together
+            </Text>
+            
+            <View style={styles.quickActionsContainer}>
+              <TouchableOpacity
+                style={[styles.quickActionButton, styles.createTeamButton]}
+                onPress={() => {
+                  setActiveTab('create');
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.quickActionEmoji}>➕</Text>
+                <Text style={styles.quickActionText}>Create Team</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickActionButton, styles.joinTeamButton]}
+                onPress={() => {
+                  setActiveTab('join');
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.quickActionEmoji}>🔗</Text>
+                <Text style={styles.quickActionText}>Join Team</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
-          teams.map((team) => (
-            <TouchableOpacity 
-              key={team.id} 
-              style={styles.teamCard}
-              onPress={() => router.push({
-                pathname: '/team-detail',
-                params: { teamId: team.id, teamName: team.name }
-              })}
+          /* Teams List */
+          <ScrollView style={styles.teamsContainer} showsVerticalScrollIndicator={false}>
+            {teams.map((team, index) => (
+              <TouchableOpacity 
+                key={team.id} 
+                style={[styles.teamCard, index === 0 && styles.firstTeamCard]}
+                onPress={() => router.push({
+                  pathname: '/team-detail',
+                  params: { teamId: team.id, teamName: team.name }
+                })}
+              >
+                <View style={styles.teamCardHeader}>
+                  <View style={styles.teamInfo}>
+                    <Text style={styles.teamName}>{team.name}</Text>
+                    <Text style={styles.memberCount}>{team.members.length} members</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.joinCodeContainer}>
+                  <Text style={styles.joinCodeLabel}>Join Code</Text>
+                  <View style={styles.joinCodeBadge}>
+                    <Text style={styles.joinCodeText}>{team.joinCode}</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.enterContainer}>
+                  <Text style={styles.enterText}>Tap to Enter →</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+            
+            {/* Add More Teams Button */}
+            <TouchableOpacity
+              style={styles.addMoreTeamsButton}
+              onPress={() => setModalVisible(true)}
             >
-              <Text style={styles.teamName}>{team.name}</Text>
-              <Text style={styles.joinCodeText}>Join Code: {team.joinCode}</Text>
-              <Text style={styles.memberCount}>{team.members.length} members</Text>
+              <Text style={styles.enterText}>+ Add More Teams</Text>
             </TouchableOpacity>
-          ))
+          </ScrollView>
         )}
-      </ScrollView>
+      </View>
 
-      <TouchableOpacity
-        style={styles.floatingButton}
-        onPress={() => setModalVisible(true)}
-      >
-        <Text style={styles.floatingButtonText}>+</Text>
-      </TouchableOpacity>
-
+      {/* Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -216,8 +277,14 @@ const TeamsScreen: React.FC = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.closeButton}>×</Text>
+              <Text style={styles.modalTitle}>
+                {activeTab === 'create' ? 'Create Team' : '🔗 Join Team'}
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>×</Text>
               </TouchableOpacity>
             </View>
 
@@ -227,7 +294,7 @@ const TeamsScreen: React.FC = () => {
                 onPress={() => setActiveTab('create')}
               >
                 <Text style={[styles.tabText, activeTab === 'create' && styles.activeTabText]}>
-                  Create Group
+                  Create Team
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -235,7 +302,7 @@ const TeamsScreen: React.FC = () => {
                 onPress={() => setActiveTab('join')}
               >
                 <Text style={[styles.tabText, activeTab === 'join' && styles.activeTabText]}>
-                  Join Group
+                  Join Team
                 </Text>
               </TouchableOpacity>
             </View>
@@ -246,18 +313,21 @@ const TeamsScreen: React.FC = () => {
                   <Text style={styles.inputLabel}>Team Name</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter team name"
-                    placeholderTextColor="#AEC3B0"
+                    placeholder="Enter your team name"
+                    placeholderTextColor="#6B7280"
                     value={newTeamName}
                     onChangeText={setNewTeamName}
                   />
                   <TouchableOpacity style={styles.actionButton} onPress={handleCreateTeam}>
-                    <Text style={styles.actionButtonText}>Create Team</Text>
+                    <Text style={styles.actionButtonText}>🎯 Create Team</Text>
                   </TouchableOpacity>
+                  <Text style={styles.helpText}>
+                    You'll get a 6-digit code to share with friends
+                  </Text>
                 </View>
               ) : (
                 <View>
-                  <Text style={styles.inputLabel}>Join Code</Text>
+                  <Text style={styles.inputLabel}>Enter Join Code</Text>
                   <View style={styles.codeInputContainer}>
                     {joinCode.map((digit, index) => (
                       <View key={index} style={styles.codeInputWrapper}>
@@ -280,8 +350,11 @@ const TeamsScreen: React.FC = () => {
                     ))}
                   </View>
                   <TouchableOpacity style={styles.actionButton} onPress={handleJoinTeam}>
-                    <Text style={styles.actionButtonText}>Join Team</Text>
+                    <Text style={styles.actionButtonText}>🔗 Join Team</Text>
                   </TouchableOpacity>
+                  <Text style={styles.helpText}>
+                    Ask your friend for their team's join code
+                  </Text>
                 </View>
               )}
             </View>
@@ -297,152 +370,283 @@ export default TeamsScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#01161E',
-    paddingHorizontal: 20,
+    backgroundColor: '#0A0E27',
+  },
+  header: {
+    paddingHorizontal: 24,
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: 24,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 20,
-    textAlign: 'center',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  mainContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingEmoji: {
+    fontSize: 60,
+    marginBottom: 16,
   },
   loadingText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  welcomeContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  welcomeEmoji: {
+    fontSize: 80,
+    marginBottom: 24,
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 16,
     textAlign: 'center',
-    marginTop: 50,
+  },
+  welcomeText: {
     fontSize: 16,
-    color: '#EFF6E0',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 40,
+  },
+  quickActionsContainer: {
+    width: '100%',
+    gap: 16,
+  },
+  quickActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  createTeamButton: {
+    backgroundColor: '#00F5FF',
+  },
+  joinTeamButton: {
+    backgroundColor: 'rgba(0, 245, 255, 0.1)',
+    borderWidth: 2,
+    borderColor: '#00F5FF',
+  },
+  quickActionEmoji: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  quickActionText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0A0E27',
   },
   teamsContainer: {
     flex: 1,
-    marginBottom: 80,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 50,
-    color: '#AEC3B0',
-    fontSize: 16,
   },
   teamCard: {
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
+    backgroundColor: 'rgba(16, 23, 42, 0.8)',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.2)',
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  firstTeamCard: {
+    borderColor: '#00F5FF',
+    shadowOpacity: 0.2,
+  },
+  teamCardHeader: {
+    marginBottom: 16,
+  },
+  teamInfo: {
+    flex: 1,
   },
   teamName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 5,
-  },
-  joinCodeText: {
-    fontSize: 14,
-    color: '#598392',
-    marginBottom: 3,
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
   memberCount: {
-    fontSize: 12,
-    color: '#AEC3B0',
+    fontSize: 14,
+    color: '#6B7280',
   },
-  floatingButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#598392',
-    justifyContent: 'center',
+  joinCodeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    marginBottom: 16,
   },
-  floatingButtonText: {
-    fontSize: 24,
-    color: '#EFF6E0',
+  joinCodeLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  joinCodeBadge: {
+    backgroundColor: 'rgba(0, 245, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#00F5FF',
+  },
+  joinCodeText: {
+    fontSize: 16,
     fontWeight: 'bold',
+    color: '#00F5FF',
+  },
+  enterContainer: {
+    alignItems: 'flex-end',
+  },
+  enterText: {
+    fontSize: 14,
+    color: '#00F5FF',
+    fontWeight: '600',
+  },
+  addMoreTeamsButton: {
+    backgroundColor: 'rgba(0, 245, 255, 0.1)',
+    borderWidth: 2,
+    borderColor: '#00F5FF',
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    paddingVertical: 20,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 100,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContainer: {
-    backgroundColor: '#124559',
-    borderRadius: 12,
-    padding: 20,
-    width: '90%',
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: 24,
+    width: width * 0.9,
     maxWidth: 400,
+    shadowColor: '#00F5FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 6,
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   closeButton: {
-    fontSize: 24,
-    color: '#EFF6E0',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 20,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   tabContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
-    backgroundColor: '#01161E',
-    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 12,
     padding: 4,
+    marginBottom: 24,
   },
   tab: {
     flex: 1,
     paddingVertical: 12,
     alignItems: 'center',
-    borderRadius: 6,
+    borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: '#598392',
+    backgroundColor: '#00F5FF',
   },
   tabText: {
     fontSize: 14,
-    color: '#AEC3B0',
-    fontWeight: '500',
+    color: '#6B7280',
+    fontWeight: '600',
   },
   activeTabText: {
-    color: '#EFF6E0',
+    color: '#0A0E27',
   },
   tabContent: {
-    minHeight: 120,
+    minHeight: 160,
   },
   inputLabel: {
     fontSize: 16,
-    color: '#EFF6E0',
-    marginBottom: 8,
-    fontWeight: '500',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   input: {
-    backgroundColor: '#01161E',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
-    color: '#EFF6E0',
+    color: '#FFFFFF',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#598392',
+    borderColor: 'rgba(0, 245, 255, 0.3)',
+    textAlign: 'center',
   },
   actionButton: {
-    backgroundColor: '#598392',
-    borderRadius: 8,
-    padding: 14,
+    backgroundColor: '#00F5FF',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
+    marginBottom: 12,
   },
   actionButtonText: {
-    color: '#EFF6E0',
+    color: '#0A0E27',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   codeInputContainer: {
     flexDirection: 'row',
@@ -455,19 +659,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   codeInput: {
-    backgroundColor: '#01161E',
-    borderRadius: 8,
-    width: 40,
-    height: 50,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 12,
+    width: 45,
+    height: 55,
     fontSize: 18,
-    color: '#EFF6E0',
-    borderWidth: 1,
-    borderColor: '#598392',
+    color: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: 'rgba(0, 245, 255, 0.3)',
     marginHorizontal: 4,
+    fontWeight: 'bold',
   },
   dash: {
-    color: '#EFF6E0',
+    color: '#6B7280',
     fontSize: 18,
     marginHorizontal: 8,
+    fontWeight: 'bold',
   },
 });
