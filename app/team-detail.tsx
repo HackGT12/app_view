@@ -52,8 +52,8 @@ interface Member {
 }
 
 interface GameScores {
-  team1Score?: number;
-  team2Score?: number;
+  homeTeamScore?: number;
+  awayTeamScore?: number;
 }
 
 export default function TeamDetail() {
@@ -82,7 +82,7 @@ export default function TeamDetail() {
       if (!groupLine) return;
       
       // Determine actual score based on question (simplified - assumes team1/team2 mapping)
-      const actualScore = groupLine.question.includes('team 1') ? actualScores.team1Score : actualScores.team2Score;
+      const actualScore = groupLine.question.includes('team 1') ? actualScores.homeTeamScore : actualScores.awayTeamScore;
       if (actualScore === undefined) return;
       
       // Check if prediction was correct
@@ -104,7 +104,7 @@ export default function TeamDetail() {
     fetchTeamData();
     
     // WebSocket connection
-    const ws = new WebSocket('ws://16.56.9.190:8080');
+    const ws = new WebSocket('ws://10.136.7.78:8080');
 
     ws.onopen = () => {
       setConnectionStatus('Connected');
@@ -114,10 +114,10 @@ export default function TeamDetail() {
       const data = JSON.parse(event.data);
       
       // Look for team scores in the WebSocket data
-      if (data.team1Score !== undefined || data.team2Score !== undefined) {
+      if (data.homeTeamScore !== undefined || data.awayTeamScore !== undefined) {
         setGameScores({
-          team1Score: data.team1Score,
-          team2Score: data.team2Score
+          homeTeamScore: data.homeTeamScore,
+          awayTeamScore: data.awayTeamScore
         });
       }
     };
@@ -198,7 +198,7 @@ export default function TeamDetail() {
 
   // Update member scores when game scores change
   useEffect(() => {
-    if (!teamData || (gameScores.team1Score === undefined && gameScores.team2Score === undefined)) return;
+    if (!teamData || (gameScores.homeTeamScore === undefined && gameScores.awayTeamScore === undefined)) return;
     
     const updatedMembers = members.map(member => {
       const memberBets = teamData.playerResponses?.[member.id] || {};
@@ -290,7 +290,7 @@ export default function TeamDetail() {
               <Text style={styles.vsText}>VS</Text>
               
               <View style={styles.teamSection}>
-                <Text style={styles.teamName}>Tampa Bay Bucks</Text>
+                <Text style={styles.teamName}>Tampa Bay Buccaneers</Text>
                 <Text style={styles.awayIndicator}>AWAY</Text>
               </View>
             </View>
@@ -318,7 +318,7 @@ export default function TeamDetail() {
         <TouchableOpacity onPress={() => setSelectedGame(null)} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Falcons vs Bucks</Text>
+        <Text style={styles.title}>Falcons vs Buccaneers</Text>
       </View>
 
       <View style={styles.tabContainer}>
@@ -454,9 +454,9 @@ export default function TeamDetail() {
               <Text style={[styles.connectionStatus, { color: connectionStatus === 'Connected' ? '#4CAF50' : '#F44336' }]}>
                 WebSocket: {connectionStatus}
               </Text>
-              {gameScores.team1Score !== undefined && (
+              {gameScores.homeTeamScore !== undefined && (
                 <Text style={styles.scoresText}>
-                  Team 1: {gameScores.team1Score} | Team 2: {gameScores.team2Score || 0}
+                  Team 1: {gameScores.homeTeamScore} | Team 2: {gameScores.awayTeamScore || 0}
                 </Text>
               )}
             </View>
