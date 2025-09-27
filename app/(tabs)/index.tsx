@@ -10,6 +10,8 @@ import {
   Animated,
   PanResponder,
   StatusBar,
+  Vibration,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,26 +80,247 @@ const LEAGUES = [
   },
 ];
 
+// Lightning Flash Component
+const LightningFlash = ({ visible }) => {
+  const flashAnim = useRef(new Animated.Value(0)).current;
+  const lightningPaths = useRef([]);
+
+  useEffect(() => {
+    if (visible) {
+      // Create lightning paths
+      lightningPaths.current = Array.from({ length: 5 }, (_, i) => ({
+        id: i,
+        opacity: new Animated.Value(0),
+        x: Math.random() * width,
+        rotation: Math.random() * 360,
+      }));
+
+      // Flash sequence
+      Animated.sequence([
+        Animated.timing(flashAnim, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(flashAnim, {
+          toValue: 0,
+          duration: 50,
+          useNativeDriver: true,
+        }),
+        Animated.timing(flashAnim, {
+          toValue: 1,
+          duration: 80,
+          useNativeDriver: true,
+        }),
+        Animated.timing(flashAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Lightning bolt animations
+      lightningPaths.current.forEach((path, index) => {
+        Animated.sequence([
+          Animated.delay(index * 50),
+          Animated.timing(path.opacity, {
+            toValue: 1,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(path.opacity, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      {/* Screen flash */}
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            backgroundColor: '#FFD700',
+            opacity: flashAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.3],
+            }),
+          },
+        ]}
+      />
+      {/* Lightning bolts */}
+      {lightningPaths.current.map((path) => (
+        <Animated.View
+          key={path.id}
+          style={[
+            styles.lightning,
+            {
+              left: path.x,
+              opacity: path.opacity,
+              transform: [{ rotate: `${path.rotation}deg` }],
+            },
+          ]}
+        >
+          <Text style={styles.lightningBolt}>⚡</Text>
+        </Animated.View>
+      ))}
+    </View>
+  );
+};
+
+// Particle Effect Component
+const ParticleEffect = ({ visible }) => {
+  const particles = useRef([]);
+  
+  useEffect(() => {
+    if (visible) {
+      // Create multiple particles
+      particles.current = Array.from({ length: 20 }, (_, i) => ({
+        id: i,
+        animation: new Animated.Value(0),
+        x: Math.random() * width,
+        y: height / 2,
+        scale: new Animated.Value(0),
+      }));
+
+      // Animate particles
+      particles.current.forEach((particle, index) => {
+        Animated.parallel([
+          Animated.timing(particle.animation, {
+            toValue: 1,
+            duration: 2000 + index * 100,
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.timing(particle.scale, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(particle.scale, {
+              toValue: 0,
+              duration: 1800,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]).start();
+      });
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      {particles.current.map((particle) => (
+        <Animated.View
+          key={particle.id}
+          style={[
+            styles.particle,
+            {
+              left: particle.x,
+              top: particle.y,
+              transform: [
+                {
+                  translateY: particle.animation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -height],
+                  }),
+                },
+                {
+                  scale: particle.scale,
+                },
+              ],
+              opacity: particle.animation.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [1, 1, 0],
+              }),
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+};
+
 // Game Room View Component
 const GameRoomView = ({ selectedLeague, onBack }) => {
-  const [activeTab, setActiveTab] = useState('Live Info');
   const [timeLeft, setTimeLeft] = useState(45);
   const [coins, setCoins] = useState(300);
   const [showMicroBet, setShowMicroBet] = useState(false);
   const [currentMicroBet, setCurrentMicroBet] = useState(null);
+  const [showParticles, setShowParticles] = useState(false);
+  const [showLightning, setShowLightning] = useState(false);
   const insets = useSafeAreaInsets();
 
-  // Animation values for popup
+  // Animation values
+  const scrollY = useRef(new Animated.Value(0)).current;
   const popupScale = useRef(new Animated.Value(0)).current;
   const popupOpacity = useRef(new Animated.Value(0)).current;
   const swipeAnimX = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(width)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const sparkleAnim = useRef(new Animated.Value(0)).current;
+
+  // Continuous animations
+  useEffect(() => {
+    // Glow effect
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Pulse effect
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Sparkle effect
+    Animated.loop(
+      Animated.timing(sparkleAnim, {
+        toValue: 1,
+        duration: 3000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
 
   // Entry animation
   useEffect(() => {
-    Animated.timing(slideAnim, {
+    Animated.spring(slideAnim, {
       toValue: 0,
-      duration: 300,
+      tension: 50,
+      friction: 8,
       useNativeDriver: true,
     }).start();
   }, []);
@@ -110,9 +333,14 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
       },
       onPanResponderMove: (evt, gestureState) => {
         swipeAnimX.setValue(gestureState.dx);
+        
+        // Vibrate during swipe
+        if (Math.abs(gestureState.dx) > 50) {
+          Vibration.vibrate(10);
+        }
       },
       onPanResponderRelease: (evt, gestureState) => {
-        if (Math.abs(gestureState.dx) > 100) {
+        if (Math.abs(gestureState.dx) > 120) {
           const direction = gestureState.dx > 0 ? 'right' : 'left';
           const choice = direction === 'left' ? currentMicroBet?.optionA : currentMicroBet?.optionB;
           handleSwipe(direction, choice);
@@ -131,12 +359,6 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
   const matchData = {
     homeTeam: { name: 'Brazil', flag: '🇧🇷', score: 3 },
     awayTeam: { name: 'Argentina', flag: '🇦🇷', score: 0 },
-    stats: {
-      shooting: { home: 12, away: 22 },
-      attacks: { home: 22, away: 43 },
-      possession: { home: 42, away: 58 },
-      corners: { home: 32, away: 4 }
-    }
   };
 
   const pastBets = [
@@ -145,25 +367,29 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
       description: 'Next Goal Scorer',
       choice: 'Messi',
       result: 'won',
-      rightPercentage: 15,
-      wrongPercentage: 85,
+      amount: '+125',
     },
     {
       id: 2,
       description: 'Next Card Color',
       choice: 'Yellow',
       result: 'lost',
-      rightPercentage: 78,
-      wrongPercentage: 22,
+      amount: '-50',
     },
     {
       id: 3,
       description: 'Next Corner',
       choice: 'Brazil',
       result: 'won',
-      rightPercentage: 45,
-      wrongPercentage: 55,
-    }
+      amount: '+75',
+    },
+    {
+      id: 4,
+      description: 'Next Foul',
+      choice: 'Argentina',
+      result: 'won',
+      amount: '+200',
+    },
   ];
 
   // Timer countdown effect
@@ -172,7 +398,7 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           triggerMicroBet();
-          return Math.floor(Math.random() * 60) + 30;
+          return Math.floor(Math.random() * 45) + 30;
         }
         return prev - 1;
       });
@@ -186,50 +412,98 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
       {
         question: "Who will score the next goal?",
         optionA: "Brazil",
-        optionB: "Argentina"
+        optionB: "Argentina",
       },
       {
         question: "Next card color?",
         optionA: "Yellow",
-        optionB: "Red"
+        optionB: "Red",
       },
       {
         question: "Next corner kick?",
         optionA: "Brazil",
-        optionB: "Argentina"
+        optionB: "Argentina",
+      },
+      {
+        question: "Next player to get fouled?",
+        optionA: "Messi",
+        optionB: "Neymar",
       }
     ];
 
     const randomBet = microBets[Math.floor(Math.random() * microBets.length)];
     setCurrentMicroBet(randomBet);
-    setShowMicroBet(true);
+    
+    // Lightning first, then popup
+    setShowLightning(true);
+    setShowParticles(true);
 
-    Animated.parallel([
-      Animated.spring(popupScale, {
-        toValue: 1,
-        tension: 100,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-      Animated.timing(popupOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
+    // Epic vibration pattern
+    if (Platform.OS === 'ios') {
+      Vibration.vibrate([0, 100, 50, 100, 50, 200]);
+    } else {
+      Vibration.vibrate([100, 50, 100, 50, 200]);
+    }
+
+    // Screen shake effect
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
     ]).start();
+
+    setTimeout(() => {
+      setShowLightning(false);
+      setShowMicroBet(true);
+
+      // Epic popup animation
+      Animated.parallel([
+        Animated.spring(popupScale, {
+          toValue: 1,
+          tension: 100,
+          friction: 6,
+          useNativeDriver: true,
+        }),
+        Animated.timing(popupOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, 800);
+
+    setTimeout(() => setShowParticles(false), 2000);
   };
 
   const handleSwipe = (direction, choice) => {
-    Animated.timing(swipeAnimX, {
-      toValue: direction === 'left' ? -width : width,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
+    // Success vibration
+    Vibration.vibrate(200);
+
+    // Explosive exit animation
+    Animated.parallel([
+      Animated.timing(swipeAnimX, {
+        toValue: direction === 'left' ? -width * 1.5 : width * 1.5,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(popupScale, {
+        toValue: 0.8,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       setShowMicroBet(false);
       swipeAnimX.setValue(0);
       popupScale.setValue(0);
       popupOpacity.setValue(0);
-      setCoins(prev => prev + Math.floor(Math.random() * 50) + 10);
+      
+      const earned = Math.floor(Math.random() * 100) + 25;
+      setCoins(prev => prev + earned);
+      
+      // Show success particles
+      setShowParticles(true);
+      setTimeout(() => setShowParticles(false), 1500);
     });
   };
 
@@ -249,205 +523,298 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'Live Info':
-        return (
-          <View style={gameStyles.statsContainer}>
-            {Object.entries(matchData.stats).map(([key, value]) => (
-              <View key={key} style={gameStyles.statRow}>
-                <Text style={gameStyles.statValue}>{value.home}</Text>
-                <Text style={gameStyles.statLabel}>
-                  {key.charAt(0).toUpperCase() + key.slice(1)}
-                </Text>
-                <Text style={gameStyles.statValue}>{value.away}</Text>
-              </View>
-            ))}
-            <TouchableOpacity style={gameStyles.seeAllButton}>
-              <Text style={gameStyles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      case 'Total Raised':
-        return (
-          <View style={gameStyles.tabContent}>
-            <Text style={gameStyles.totalRaisedText}>$125,420</Text>
-            <Text style={gameStyles.totalRaisedLabel}>Total Raised This Game</Text>
-          </View>
-        );
-      case 'Live Comments':
-        return (
-          <ScrollView style={gameStyles.commentsContainer}>
-            <View style={gameStyles.comment}>
-              <Text style={gameStyles.commentUser}>User123:</Text>
-              <Text style={gameStyles.commentText}>Brazil looking strong! 🔥</Text>
-            </View>
-            <View style={gameStyles.comment}>
-              <Text style={gameStyles.commentUser}>BetKing:</Text>
-              <Text style={gameStyles.commentText}>Easy money on next goal</Text>
-            </View>
-          </ScrollView>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <Animated.View 
       style={[
         gameStyles.container, 
         { 
           paddingTop: insets.top,
-          transform: [{ translateX: slideAnim }]
+          transform: [
+            { translateX: slideAnim },
+            { translateX: shakeAnim }
+          ]
         }
       ]}
     >
-      <StatusBar barStyle="light-content" backgroundColor="rgba(0,0,0,0.1)" translucent />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" translucent={false} />
       
-      {/* Header with glassmorphism effect */}
+      {/* Particle Effects */}
+      <ParticleEffect visible={showParticles} />
+      {/* Lightning Effects */}
+      <LightningFlash visible={showLightning} />
+      
+      {/* Premium Header */}
       <LinearGradient
-        colors={['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+        colors={['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.4)']}
         style={gameStyles.header}
       >
         <TouchableOpacity style={gameStyles.backButton} onPress={handleBack}>
-          <View style={gameStyles.backButtonContainer}>
+          <LinearGradient
+            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+            style={gameStyles.backButtonContainer}
+          >
             <Ionicons name="arrow-back" size={20} color="#ffffff" />
-          </View>
+          </LinearGradient>
         </TouchableOpacity>
-        <Text style={gameStyles.headerTitle}>{league?.name} Live</Text>
-        <TouchableOpacity style={gameStyles.menuButton}>
-          <View style={gameStyles.menuButtonContainer}>
-            <Ionicons name="ellipsis-vertical" size={16} color="#ffffff" />
+        <View style={gameStyles.headerCenter}>
+          <Text style={gameStyles.headerTitle}>{league?.name}</Text>
+          <View style={gameStyles.liveIndicator}>
+            <Animated.View 
+              style={[
+                gameStyles.liveDot,
+                {
+                  opacity: glowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.6, 1],
+                  })
+                }
+              ]} 
+            />
+            <Text style={gameStyles.liveText}>LIVE</Text>
           </View>
+        </View>
+        <TouchableOpacity style={gameStyles.menuButton}>
+          <LinearGradient
+            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+            style={gameStyles.menuButtonContainer}
+          >
+            <Ionicons name="ellipsis-vertical" size={16} color="#ffffff" />
+          </LinearGradient>
         </TouchableOpacity>
       </LinearGradient>
 
-      <ScrollView style={gameStyles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Hero Match Display */}
-        <View style={gameStyles.matchContainer}>
+      <Animated.ScrollView 
+        style={gameStyles.scrollContainer} 
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        scrollEventThrottle={16}
+      >
+        {/* Hero Match Display with Parallax */}
+        <Animated.View 
+          style={[
+            gameStyles.matchContainer,
+            {
+              transform: [
+                {
+                  translateY: scrollY.interpolate({
+                    inputRange: [0, 200],
+                    outputRange: [0, -50],
+                    extrapolate: 'clamp',
+                  }),
+                },
+                {
+                  scale: glowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.02],
+                  })
+                }
+              ]
+            }
+          ]}
+        >
           <LinearGradient
-            colors={league?.gradient || ['#667eea', '#764ba2']}
+            colors={[...league?.gradient || ['#667eea', '#764ba2'], 'rgba(0,0,0,0.3)']}
             style={gameStyles.matchGradient}
           >
             <View style={gameStyles.matchOverlay}>
               <View style={gameStyles.matchContent}>
-                <View style={gameStyles.matchIcon}>
+                <Animated.View 
+                  style={[
+                    gameStyles.matchIcon,
+                    {
+                      transform: [{
+                        rotate: sparkleAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['0deg', '360deg'],
+                        })
+                      }]
+                    }
+                  ]}
+                >
                   <Ionicons name={league?.image} size={48} color="#ffffff" />
-                </View>
-                <Text style={gameStyles.liveText}>LIVE NOW</Text>
-                <View style={gameStyles.livePulse} />
+                </Animated.View>
+                <Text style={gameStyles.matchStatus}>CHAMPIONSHIP FINAL</Text>
               </View>
             </View>
           </LinearGradient>
-        </View>
+        </Animated.View>
 
-        {/* Elegant Score Card */}
+        {/* Premium Score Card */}
         <View style={gameStyles.scoreCard}>
           <LinearGradient
-            colors={['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+            colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
             style={gameStyles.scoreGradient}
           >
             <View style={gameStyles.teamScore}>
               <View style={gameStyles.team}>
                 <Text style={gameStyles.teamFlag}>{matchData.homeTeam.flag}</Text>
-                <Text style={gameStyles.teamName}>BRA</Text>
+                <Text style={gameStyles.teamName}>BRAZIL</Text>
+                <Text style={gameStyles.teamRecord}>12-2-1</Text>
               </View>
               <View style={gameStyles.scoreDisplay}>
                 <Text style={gameStyles.score}>
                   {matchData.homeTeam.score} - {matchData.awayTeam.score}
                 </Text>
-                <Text style={gameStyles.matchTime}>78'</Text>
+                <View style={gameStyles.matchInfo}>
+                  <Text style={gameStyles.matchTime}>78' • 2nd Half</Text>
+                  <View style={gameStyles.stadium}>
+                    <Ionicons name="location" size={12} color="rgba(255,255,255,0.6)" />
+                    <Text style={gameStyles.stadiumText}>Maracanã</Text>
+                  </View>
+                </View>
               </View>
               <View style={gameStyles.team}>
                 <Text style={gameStyles.teamFlag}>{matchData.awayTeam.flag}</Text>
-                <Text style={gameStyles.teamName}>ARG</Text>
+                <Text style={gameStyles.teamName}>ARGENTINA</Text>
+                <Text style={gameStyles.teamRecord}>10-3-2</Text>
               </View>
             </View>
           </LinearGradient>
         </View>
 
-        {/* Modern Tabs */}
-        <View style={gameStyles.tabsWrapper}>
-          <View style={gameStyles.tabsContainer}>
-            {['Live Info', 'Total Raised', 'Live Comments'].map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={[gameStyles.tab, activeTab === tab && gameStyles.activeTab]}
-                onPress={() => setActiveTab(tab)}
-                activeOpacity={0.7}
-              >
-                <Text style={[gameStyles.tabText, activeTab === tab && gameStyles.activeTabText]}>
-                  {tab}
+        {/* Total Raised Section - Compact Full Width */}
+        <View style={gameStyles.totalRaisedBottom}>
+          <Animated.View 
+            style={[
+              gameStyles.tabContent, 
+              { transform: [{ scale: 0.95 }] } // slightly smaller but still full width
+            ]}
+          >
+            <LinearGradient
+              colors={['rgba(34, 197, 94, 0.2)', 'rgba(34, 197, 94, 0.1)']}
+              style={[gameStyles.raisedCard, { paddingVertical: 14, paddingHorizontal: 16 }]}
+            >
+              <View style={[gameStyles.raisedHeader, { marginBottom: 8 }]}>
+                <Ionicons name="trending-up" size={20} color="#22c55e" />
+                <Text style={[gameStyles.raisedLabel, { fontSize: 13 }]}>
+                  Total Raised
                 </Text>
-                {activeTab === tab && <View style={gameStyles.tabIndicator} />}
-              </TouchableOpacity>
-            ))}
-          </View>
+              </View>
+
+              <Text style={[gameStyles.totalRaisedText, { fontSize: 22 }]}>
+                $347,892
+              </Text>
+            </LinearGradient>
+          </Animated.View>
         </View>
 
-        {/* Tab Content */}
-        <View style={gameStyles.contentContainer}>
-          {renderTabContent()}
-        </View>
-
-        {/* Modern Past Bets */}
+        {/* Premium Past Bets */}
         <View style={gameStyles.pastBetsContainer}>
-          <Text style={gameStyles.pastBetsTitle}>Recent Micro Bets</Text>
+          <View style={gameStyles.sectionHeader}>
+            <Text style={gameStyles.pastBetsTitle}>Recent Micro Bets</Text>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={gameStyles.betsScroll}>
-            {pastBets.map((bet) => (
-              <View key={bet.id} style={gameStyles.betCard}>
+            {pastBets.map((bet, index) => (
+              <Animated.View
+                key={bet.id}
+                style={[
+                  gameStyles.betCard,
+                  {
+                    transform: [{
+                      scale: pulseAnim.interpolate({
+                        inputRange: [1, 1.05],
+                        outputRange: [1, index === 0 ? 1.02 : 1],
+                      })
+                    }]
+                  }
+                ]}
+              >
                 <LinearGradient
-                  colors={bet.result === 'won' ? ['#4ade80', '#22c55e'] : ['#ef4444', '#dc2626']}
+                  colors={bet.result === 'won' 
+                    ? ['rgba(34, 197, 94, 0.3)', 'rgba(34, 197, 94, 0.1)'] 
+                    : ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']}
                   style={gameStyles.betCardGradient}
                 >
                   <View style={gameStyles.betHeader}>
-                    <Ionicons 
-                      name={bet.result === 'won' ? 'checkmark-circle' : 'close-circle'} 
-                      size={20} 
-                      color="#ffffff" 
-                    />
-                    <Text style={gameStyles.betResult}>
-                      {bet.result === 'won' ? 'Won!' : 'Lost'}
+                    <View style={gameStyles.betStatus}>
+                      <Ionicons 
+                        name={bet.result === 'won' ? 'checkmark-circle' : 'close-circle'} 
+                        size={16} 
+                        color={bet.result === 'won' ? '#22c55e' : '#ef4444'} 
+                      />
+                      <Text style={[
+                        gameStyles.betResult,
+                        { color: bet.result === 'won' ? '#22c55e' : '#ef4444' }
+                      ]}>
+                        {bet.result === 'won' ? 'Won' : 'Lost'}
+                      </Text>
+                    </View>
+                    <Text style={[
+                      gameStyles.betAmount,
+                      { color: bet.result === 'won' ? '#22c55e' : '#ef4444' }
+                    ]}>
+                      {bet.amount}
                     </Text>
                   </View>
                   <Text style={gameStyles.betDescription}>{bet.description}</Text>
                   <Text style={gameStyles.betChoice}>Your pick: {bet.choice}</Text>
-                  <View style={gameStyles.betStats}>
-                    <Text style={gameStyles.betPercentage}>
-                      {bet.rightPercentage}% correct
-                    </Text>
+                  <View style={gameStyles.betFooter}>
+                    <Text style={gameStyles.betTime}>2 min ago</Text>
+                    <TouchableOpacity style={gameStyles.shareButton}>
+                      <Ionicons name="share-outline" size={12} color="rgba(255,255,255,0.6)" />
+                    </TouchableOpacity>
                   </View>
                 </LinearGradient>
-              </View>
+              </Animated.View>
             ))}
           </ScrollView>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
-      {/* Modern Bottom Panel */}
+      {/* Ultra Premium Bottom Panel */}
       <LinearGradient
-        colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.2)']}
+        colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.6)']}
         style={gameStyles.bottomContainer}
       >
-        <View style={gameStyles.nextBetCard}>
-          <View style={gameStyles.timerContainer}>
-            <Ionicons name="time-outline" size={18} color="#ffffff" />
-            <Text style={gameStyles.nextBetLabel}>Next Bet</Text>
-          </View>
-          <Text style={gameStyles.nextBetTime}>{formatTime(timeLeft)}</Text>
-        </View>
+        <Animated.View 
+          style={[
+            gameStyles.nextBetCard,
+            {
+              transform: [{
+                scale: timeLeft <= 10 ? pulseAnim : new Animated.Value(1)
+              }]
+            }
+          ]}
+        >
+          <LinearGradient
+            colors={timeLeft <= 10 
+              ? ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']
+              : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+            style={gameStyles.timerGradient}
+          >
+            <View style={gameStyles.timerContainer}>
+              <Ionicons 
+                name="flash" 
+                size={18} 
+                color={timeLeft <= 10 ? "#ef4444" : "#4ade80"} 
+              />
+              <Text style={gameStyles.nextBetLabel}>Next Micro Bet</Text>
+            </View>
+            <Text style={[
+              gameStyles.nextBetTime,
+              { color: timeLeft <= 10 ? "#ef4444" : "#ffffff" }
+            ]}>
+              {formatTime(timeLeft)}
+            </Text>
+          </LinearGradient>
+        </Animated.View>
         
         <View style={gameStyles.coinsCard}>
-          <View style={gameStyles.coinsHeader}>
-            <Ionicons name="trophy" size={18} color="#FFD700" />
-            <Text style={gameStyles.coinsLabel}>Coins</Text>
-          </View>
-          <Text style={gameStyles.coinsAmount}>{coins}</Text>
+          <LinearGradient
+            colors={['rgba(255, 215, 0, 0.3)', 'rgba(255, 215, 0, 0.1)']}
+            style={gameStyles.coinsGradient}
+          >
+            <View style={gameStyles.coinsHeader}>
+              <Ionicons name="diamond" size={18} color="#FFD700" />
+              <Text style={gameStyles.coinsLabel}>Coins</Text>
+            </View>
+            <Text style={gameStyles.coinsAmount}>{coins.toLocaleString()}</Text>
+            <Text style={gameStyles.coinsSubtext}>+{Math.floor(coins * 0.05)} today</Text>
+          </LinearGradient>
         </View>
       </LinearGradient>
 
-      {/* Ultra Modern Micro Bet Popup */}
+      {/* BEAUTIFUL Clean Micro Bet Popup */}
       <Modal visible={showMicroBet} transparent animationType="none">
         <View style={gameStyles.popupOverlay}>
           <Animated.View
@@ -456,7 +823,13 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
               {
                 transform: [
                   { scale: popupScale },
-                  { translateX: swipeAnimX }
+                  { translateX: swipeAnimX },
+                  {
+                    rotateZ: swipeAnimX.interpolate({
+                      inputRange: [-width, 0, width],
+                      outputRange: ['-15deg', '0deg', '15deg'],
+                    })
+                  }
                 ],
                 opacity: popupOpacity,
               },
@@ -464,19 +837,33 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
             {...panResponder.panHandlers}
           >
             <LinearGradient
-              colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.1)']}
+              colors={['#1a1a2e', '#16213e', '#0f3460']}
               style={gameStyles.popupGradient}
             >
+              {/* Beautiful Header */}
               <View style={gameStyles.popupHeader}>
-                <Text style={gameStyles.popupTitle}>🔥 MICRO BET</Text>
-                <View style={gameStyles.popupPulse} />
+                <Text style={gameStyles.popupEmoji}>{currentMicroBet?.emoji}</Text>
+                <Animated.Text 
+                  style={[
+                    gameStyles.popupTitle,
+                    {
+                      transform: [{
+                        scale: pulseAnim
+                      }]
+                    }
+                  ]}
+                >
+                  MICRO BET
+                </Animated.Text>
+                <Text style={gameStyles.popupSubtitle}>Make your prediction</Text>
               </View>
               
               <Text style={gameStyles.popupQuestion}>{currentMicroBet?.question}</Text>
               
+              {/* Beautiful Options */}
               <View style={gameStyles.optionsContainer}>
                 <TouchableOpacity
-                  style={[gameStyles.optionButton, gameStyles.optionLeft]}
+                  style={gameStyles.optionButton}
                   onPress={() => handleSwipe('left', currentMicroBet?.optionA)}
                   activeOpacity={0.8}
                 >
@@ -484,17 +871,21 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                     colors={['#667eea', '#764ba2']}
                     style={gameStyles.optionGradient}
                   >
-                    <Text style={gameStyles.optionText}>{currentMicroBet?.optionA}</Text>
-                    <Text style={gameStyles.swipeHint}>👈 Swipe</Text>
+                    <View style={gameStyles.optionContent}>
+                      <Ionicons name="chevron-back" size={24} color="#ffffff" />
+                      <Text style={gameStyles.optionText}>{currentMicroBet?.optionA}</Text>
+                    </View>
                   </LinearGradient>
                 </TouchableOpacity>
                 
                 <View style={gameStyles.vsContainer}>
-                  <Text style={gameStyles.vsText}>VS</Text>
+                  <View style={gameStyles.vsCircle}>
+                    <Text style={gameStyles.vsText}>VS</Text>
+                  </View>
                 </View>
                 
                 <TouchableOpacity
-                  style={[gameStyles.optionButton, gameStyles.optionRight]}
+                  style={gameStyles.optionButton}
                   onPress={() => handleSwipe('right', currentMicroBet?.optionB)}
                   activeOpacity={0.8}
                 >
@@ -502,15 +893,20 @@ const GameRoomView = ({ selectedLeague, onBack }) => {
                     colors={['#f093fb', '#f5576c']}
                     style={gameStyles.optionGradient}
                   >
-                    <Text style={gameStyles.optionText}>{currentMicroBet?.optionB}</Text>
-                    <Text style={gameStyles.swipeHint}>Swipe 👉</Text>
+                    <View style={gameStyles.optionContent}>
+                      <Text style={gameStyles.optionText}>{currentMicroBet?.optionB}</Text>
+                      <Ionicons name="chevron-forward" size={24} color="#ffffff" />
+                    </View>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
 
+              {/* Clean Instructions */}
               <View style={gameStyles.swipeInstructions}>
-                <Ionicons name="swap-horizontal" size={20} color="#ffffff" />
-                <Text style={gameStyles.instructionText}>Swipe or tap to place your bet!</Text>
+                <View style={gameStyles.instructionsContainer}>
+                  <Ionicons name="swap-horizontal" size={20} color="#64748b" />
+                  <Text style={gameStyles.instructionText}>Swipe left or right to bet</Text>
+                </View>
               </View>
             </LinearGradient>
           </Animated.View>
@@ -544,7 +940,7 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#01161E" />
+      <StatusBar barStyle="light-content" backgroundColor="#01161E" translucent={false} />
       
       <View style={styles.header}>
         <Text style={styles.title}>Choose Your League</Text>
@@ -613,7 +1009,7 @@ export default function HomeScreen() {
   );
 }
 
-// Original styles (keeping the same for league selection)
+// Original styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -730,13 +1126,31 @@ const styles = StyleSheet.create({
     color: '#EFF6E0',
     marginLeft: 8,
   },
+  lightning: {
+    position: 'absolute',
+    top: '20%',
+  },
+  lightningBolt: {
+    fontSize: 50,
+    color: '#FFD700',
+    textShadowColor: '#FFD700',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  particle: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    backgroundColor: '#FFD700',
+    borderRadius: 2,
+  },
 });
 
-// Ultra Modern Game Room styles
+// Ultra Premium Game Room styles
 const gameStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#000000',
   },
   header: {
     flexDirection: 'row',
@@ -744,37 +1158,51 @@ const gameStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   backButton: {
     zIndex: 10,
   },
   backButtonContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#ffffff',
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
+    marginBottom: 2,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ef4444',
+    marginRight: 4,
+  },
+  liveText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ef4444',
+    letterSpacing: 1,
   },
   menuButton: {
     zIndex: 10,
   },
   menuButtonContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -782,15 +1210,15 @@ const gameStyles = StyleSheet.create({
     flex: 1,
   },
   matchContainer: {
-    height: 220,
+    height: 200,
     margin: 20,
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
-    elevation: 8,
+    elevation: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
   },
   matchGradient: {
     flex: 1,
@@ -799,7 +1227,7 @@ const gameStyles = StyleSheet.create({
   },
   matchOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -815,27 +1243,21 @@ const gameStyles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
-  liveText: {
+  matchStatus: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: 2,
-  },
-  livePulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ff3b30',
-    marginTop: 8,
+    opacity: 0.9,
   },
   scoreCard: {
     margin: 20,
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
-    elevation: 4,
+    elevation: 8,
   },
   scoreGradient: {
-    padding: 20,
+    padding: 24,
   },
   teamScore: {
     flexDirection: 'row',
@@ -847,213 +1269,131 @@ const gameStyles = StyleSheet.create({
     flex: 1,
   },
   teamFlag: {
-    fontSize: 28,
-    marginBottom: 4,
+    fontSize: 32,
+    marginBottom: 8,
   },
   teamName: {
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-    opacity: 0.8,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  teamRecord: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10,
+    fontWeight: '500',
   },
   scoreDisplay: {
     alignItems: 'center',
     flex: 1,
   },
   score: {
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: 36,
+    fontWeight: '900',
     color: '#ffffff',
-    marginBottom: 4,
+    marginBottom: 8,
+  },
+  matchInfo: {
+    alignItems: 'center',
   },
   matchTime: {
     color: '#4ade80',
     fontSize: 12,
-    fontWeight: '600',
-  },
-  tabsWrapper: {
-    paddingHorizontal: 20,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 12,
-    position: 'relative',
-  },
-  activeTab: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  tabText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  activeTabText: {
-    color: '#ffffff',
     fontWeight: '700',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 4,
-    width: 20,
-    height: 2,
-    backgroundColor: '#4ade80',
-    borderRadius: 1,
-  },
-  contentContainer: {
-    margin: 20,
-    marginTop: 10,
-  },
-  statsContainer: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    padding: 20,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  statValue: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-    width: 40,
-    textAlign: 'center',
-  },
-  statLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  seeAllButton: {
-    alignSelf: 'center',
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-  },
-  seeAllText: {
-    color: '#4ade80',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tabContent: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-  },
-  totalRaisedText: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#4ade80',
     marginBottom: 4,
   },
-  totalRaisedLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-  },
-  commentsContainer: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
-    maxHeight: 200,
-    padding: 16,
-  },
-  comment: {
+  stadium: {
     flexDirection: 'row',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
   },
-  commentUser: {
-    color: '#4ade80',
-    fontWeight: '700',
-    marginRight: 8,
-    fontSize: 14,
-  },
-  commentText: {
-    color: '#ffffff',
-    flex: 1,
-    fontSize: 14,
+  stadiumText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10,
+    marginLeft: 2,
   },
   pastBetsContainer: {
     paddingHorizontal: 20,
     marginBottom: 20,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   pastBetsTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#ffffff',
-    marginBottom: 16,
   },
   betsScroll: {
     paddingBottom: 8,
   },
   betCard: {
-    width: 200,
+    width: 220,
     marginRight: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
-    elevation: 4,
+    elevation: 6,
   },
   betCardGradient: {
     padding: 16,
   },
   betHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
+  betStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   betResult: {
-    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+    marginLeft: 6,
+  },
+  betAmount: {
     fontSize: 14,
-    fontWeight: '700',
-    marginLeft: 8,
+    fontWeight: '800',
   },
   betDescription: {
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 4,
-    opacity: 0.9,
   },
   betChoice: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    marginBottom: 8,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    marginBottom: 12,
   },
-  betStats: {
-    alignItems: 'flex-start',
+  betFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  betPercentage: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 12,
-    fontWeight: '600',
+  betTime: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
+  },
+  shareButton: {
+    padding: 4,
   },
   bottomContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
+    paddingVertical: 20,
+    gap: 16,
   },
   nextBetCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  timerGradient: {
     padding: 16,
   },
   timerContainer: {
@@ -1062,21 +1402,23 @@ const gameStyles = StyleSheet.create({
     marginBottom: 8,
   },
   nextBetLabel: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.9)',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 6,
   },
   nextBetTime: {
     color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
   },
   coinsCard: {
-    backgroundColor: 'rgba(255,215,0,0.2)',
-    borderRadius: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    minWidth: 120,
+  },
+  coinsGradient: {
     padding: 16,
-    minWidth: 100,
     alignItems: 'center',
   },
   coinsHeader: {
@@ -1087,113 +1429,186 @@ const gameStyles = StyleSheet.create({
   coinsLabel: {
     color: '#FFD700',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 6,
   },
   coinsAmount: {
     color: '#FFD700',
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '900',
+    marginBottom: 2,
   },
-  // Ultra Modern Popup Styles
+  coinsSubtext: {
+    color: 'rgba(255, 215, 0, 0.7)',
+    fontSize: 9,
+  },
+  // Total Raised Bottom Section
+  totalRaisedBottom: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  tabContent: {
+    alignItems: 'center',
+  },
+  raisedCard: {
+    width: '100%',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  raisedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  raisedLabel: {
+    color: '#22c55e',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  totalRaisedText: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  raisedSubtext: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    marginBottom: 16,
+  },
+  progressBar: {
+    width: '100%',
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    width: '73%',
+    height: '100%',
+    backgroundColor: '#22c55e',
+  },
+  // BEAUTIFUL Clean Popup Styles
   popupOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
+    backgroundColor: 'rgba(0,0,0,0.95)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
   popupContainer: {
     width: '100%',
-    borderRadius: 24,
+    maxWidth: 360,
+    borderRadius: 32,
     overflow: 'hidden',
+    elevation: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
   },
   popupGradient: {
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    padding: 32,
   },
   popupHeader: {
     alignItems: 'center',
-    marginBottom: 20,
-    position: 'relative',
+    marginBottom: 28,
+  },
+  popupEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
   },
   popupTitle: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: '900',
     color: '#ffffff',
     textAlign: 'center',
     letterSpacing: 1,
+    marginBottom: 8,
   },
-  popupPulse: {
-    position: 'absolute',
-    top: -10,
-    right: -10,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#ff3b30',
+  popupSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   popupQuestion: {
-    fontSize: 18,
+    fontSize: 20,
     color: '#ffffff',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
     fontWeight: '600',
-    lineHeight: 24,
+    lineHeight: 28,
   },
   optionsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
+    marginBottom: 28,
+    gap: 16,
   },
   optionButton: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: 24,
     overflow: 'hidden',
-    elevation: 4,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   optionGradient: {
     padding: 20,
     alignItems: 'center',
   },
-  optionText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  swipeHint: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  vsContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  vsText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  swipeInstructions: {
+  optionContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 12,
+    gap: 8,
   },
-  instructionText: {
+  optionText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  vsContainer: {
+    alignItems: 'center',
+  },
+  vsCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  vsText: {
     color: '#ffffff',
     fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  swipeInstructions: {
+    alignItems: 'center',
+  },
+  instructionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  instructionText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
     fontWeight: '600',
-    marginLeft: 8,
   },
 });
