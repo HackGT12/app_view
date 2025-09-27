@@ -5,18 +5,19 @@ import { useAuth } from '../contexts/AuthContext';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const { signIn, signUp } = useAuth();
 
   const handleAuth = async () => {
-    if (!email || !password) {
+    if (!email || !password || (isSignUp && !name)) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     try {
       if (isSignUp) {
-        await signUp(email, password);
+        await signUp(email, password, name);
       } else {
         await signIn(email, password);
       }
@@ -28,6 +29,17 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{isSignUp ? 'Sign Up' : 'Sign In'}</Text>
+      
+      {isSignUp && (
+        <TextInput
+          style={styles.input}
+          placeholder="Full Name"
+          placeholderTextColor="#598392"
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+        />
+      )}
       
       <TextInput
         style={styles.input}
