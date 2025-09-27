@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
-import { doc, getDoc, updateDoc, increment, collection, getDocs, orderBy, query } from 'firebase/firestore';
-import { db } from '../../firebaseConfig';
+import { doc, getDoc, updateDoc, increment, collection, getDocs, orderBy, query, arrayUnion } from 'firebase/firestore';
+import { db, auth } from '../../firebaseConfig'; // ✅ make sure auth is exported in firebaseConfig
 
 interface MicroBetOption {
   id: string;
@@ -84,25 +84,37 @@ export default function Testing() {
   const handleVote = async (optionId: string) => {
     if (!activeMicroBetId || hasVoted || isBetClosed) return;
   
-    // 🔒 lock immediately
-    setHasVoted(true);
+    setHasVoted(true); // 🔒 lock immediately
   
     try {
-      const docRef = doc(db, 'microBets', activeMicroBetId);
+      // ✅ update global microBet vote count
+      const betRef = doc(db, 'microBets', activeMicroBetId);
       const optionIndex = microBetData?.options.findIndex(opt => opt.id === optionId);
-  
       if (optionIndex !== undefined && optionIndex >= 0) {
-        await updateDoc(docRef, {
+        await updateDoc(betRef, {
           [`options.${optionIndex}.votes`]: increment(1)
         });
-  
-        // Refresh from server
-        fetchMicroBetData(activeMicroBetId);
       }
+
+      // ✅ also log this bet under the current user
+      const user = auth.currentUser;
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          activeBets: arrayUnion({
+            betId: activeMicroBetId,
+            optionId,
+            question: microBetData?.question || '',
+            status: 'active',
+            placedAt: new Date()
+          })
+        });
+      }
+
+      fetchMicroBetData(activeMicroBetId);
     } catch (error) {
       Alert.alert('Error', 'Failed to submit vote');
-      // 🔓 unlock if it failed
-      setHasVoted(false);
+      setHasVoted(false); // 🔓 unlock if failed
     }
   };
 
@@ -213,97 +225,21 @@ export default function Testing() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#01161E',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  status: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  microBetContainer: {
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 20,
-  },
-  question: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#EFF6E0',
-    marginBottom: 10,
-  },
-  description: {
-    fontSize: 14,
-    color: '#AEC3B0',
-    marginBottom: 8,
-  },
-  sponsor: {
-    fontSize: 12,
-    color: '#598392',
-    marginBottom: 5,
-  },
-  donation: {
-    fontSize: 12,
-    color: '#598392',
-    marginBottom: 15,
-  },
-  optionsContainer: {
-    gap: 10,
-  },
-  optionButton: {
-    backgroundColor: '#598392',
-    padding: 12,
-    borderRadius: 6,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  optionText: {
-    color: '#EFF6E0',
-    fontSize: 14,
-    flex: 1,
-  },
-  voteCount: {
-    color: '#AEC3B0',
-    fontSize: 12,
-  },
-  winnerContainer: {
-    backgroundColor: '#4CAF50',
-    padding: 15,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  winnerText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  messageContainer: {
-    flex: 1,
-    backgroundColor: '#124559',
-    borderRadius: 8,
-    padding: 10,
-  },
-  message: {
-    color: '#EFF6E0',
-    fontSize: 14,
-    marginBottom: 5,
-    padding: 5,
-    backgroundColor: '#598392',
-    borderRadius: 4,
-  },
+  container: { flex: 1, backgroundColor: '#01161E', padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#EFF6E0', marginBottom: 10, textAlign: 'center' },
+  status: { fontSize: 16, fontWeight: '600', marginBottom: 20, textAlign: 'center' },
+  microBetContainer: { backgroundColor: '#124559', borderRadius: 8, padding: 15, marginBottom: 20 },
+  question: { fontSize: 18, fontWeight: 'bold', color: '#EFF6E0', marginBottom: 10 },
+  description: { fontSize: 14, color: '#AEC3B0', marginBottom: 8 },
+  sponsor: { fontSize: 12, color: '#598392', marginBottom: 5 },
+  donation: { fontSize: 12, color: '#598392', marginBottom: 15 },
+  optionsContainer: { gap: 10 },
+  optionButton: { backgroundColor: '#598392', padding: 12, borderRadius: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  disabledButton: { opacity: 0.6 },
+  optionText: { color: '#EFF6E0', fontSize: 14, flex: 1 },
+  voteCount: { color: '#AEC3B0', fontSize: 12 },
+  winnerContainer: { backgroundColor: '#4CAF50', padding: 15, borderRadius: 6, alignItems: 'center' },
+  winnerText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  messageContainer: { flex: 1, backgroundColor: '#124559', borderRadius: 8, padding: 10 },
+  message: { color: '#EFF6E0', fontSize: 14, marginBottom: 5, padding: 5, backgroundColor: '#598392', borderRadius: 4 },
 });
