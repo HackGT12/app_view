@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { initializeUserData } from '../utils/userInitialization';
 
 interface AuthContextType {
   user: User | null;
@@ -26,7 +27,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Initialize user data if it doesn't exist
+        await initializeUserData(user.uid, user.email || '', user.displayName || undefined);
+      }
       setUser(user);
       setLoading(false);
     });
@@ -35,19 +40,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    
+    // Ensure user data exists (for existing users who might not have complete profile)
+    await initializeUserData(user.uid, user.email || '', user.displayName || undefined);
   };
 
   const signUp = async (email: string, password: string, name: string) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
-    // Create user document in Firestore with name
-    await setDoc(doc(db, 'users', user.uid), {
-      name: name,
-      email: email,
-      createdAt: new Date()
-    });
+    // Update Firebase Auth profile with display name
+    await updateProfile(user, { displayName: name });
+    
+    // Initialize complete user data
+    await initializeUserData(user.uid, email, name);
   };
 
   const logout = async () => {
