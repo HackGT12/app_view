@@ -6,13 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  TextInput,
-  Dimensions,
   Modal,
+  TextInput,
 } from 'react-native';
 import { FirebaseService } from '../utils/firebaseService';
-import Slider from '@react-native-community/slider';
 import { useLocalSearchParams, router } from 'expo-router';
+import GameSelection from '../components/GameSelection';
+import LiveBetsTab from '../components/LiveBetsTab';
+import LeaderboardTab from '../components/LeaderboardTab';
 import { getAuth } from 'firebase/auth';
 import {
   getFirestore,
@@ -25,7 +26,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 
-const { width } = Dimensions.get('window');
+
 
 interface GroupLine {
   id: string;
