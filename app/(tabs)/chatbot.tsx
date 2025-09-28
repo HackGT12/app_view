@@ -74,48 +74,59 @@ export default function ChatbotScreen() {
   // --- connect WebSocket for live plays ---
   // --- connect WebSocket for live plays ---
   useEffect(() => {
-    const ws = new WebSocket('ws://10.136.7.78:8080'); // 👈 replace with your server IP
+    const ws = new WebSocket('ws://10.136.7.78:8080'); // replace with your server IP
     wsRef.current = ws;
-
+  
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'play_update') {
-        // store plays, but don't spam chat
-        setPlays((prev) => [...prev.slice(-9), data]); // keep last 10 plays
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'play') {
+          // ⬇️ keep the entire JSON payload, not just slices
+          setPlays((prev) => [...prev.slice(-9), data]);
+        }
+      } catch (err) {
+        console.error("❌ Error parsing WS message", err);
       }
     };
-
+  
     return () => {
       ws.close();
     };
   }, []);
-
+  
   const generateResponse = async (userMessage: string): Promise<string> => {
-    // 🔑 Use play history only as context
+    // Turn last 5–10 plays into readable context
     const recentPlays = plays
-      .map(
-        (p) =>
-          `${p.clock} | ${p.description} | Score: ${p.home_points}-${p.away_points}`
-      )
-      .join('\n');
+    .map((p, i) => {
+      const clock = p.payload?.clock ?? "—";
+      const desc = p.payload?.description ?? "No description available";
+      const home = p.homeTeamName ?? "Home";
+      const away = p.awayTeamName ?? "Away";
+      const homeScore = p.homeTeamScore ?? p.payload?.home_points ?? 0;
+      const awayScore = p.awayTeamScore ?? p.payload?.away_points ?? 0;
+  
+      return `${i + 1}. [${clock}] ${desc} | ${home} ${homeScore} - ${away} ${awayScore}`;
+    })
+    .join("\n");
+  
   
     const requestBody = {
       model: 'gpt-3.5-turbo',
       messages: [
         {
           role: 'system',
-          content: `You are a helpful sports betting guide. You have access to the last few plays of the game:\n${recentPlays}\n\nUse this info to answer user questions and explain what's happening. Context for ${selectedModel}: ${getKnowledgeBase(
-            selectedModel
-          )}`,
+          content: `You are a helpful sports betting guide. 
+  Here is the latest play-by-play feed (most recent first):
+  ${recentPlays || "No live plays available yet."}
+  
+  Answer questions using this live context and also explain betting concepts. 
+  Context for ${selectedModel}: ${getKnowledgeBase(selectedModel)}`,
         },
-        {
-          role: 'user',
-          content: userMessage,
-        },
+        { role: 'user', content: userMessage },
       ],
       max_tokens: 200,
     };
-
+  
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -126,16 +137,13 @@ export default function ChatbotScreen() {
         body: JSON.stringify(requestBody),
       });
       const data = await response.json();
-      return (
-        data.choices?.[0]?.message?.content ||
-        'Sorry, I’m not sure what just happened.'
-      );
+      return data.choices?.[0]?.message?.content || 'Sorry, I’m not sure what just happened.';
     } catch (err) {
       console.error('❌ OpenAI error', err);
       return 'Error contacting AI service.';
     }
   };
-
+  
   const sendMessage = async () => {
     if (!inputText.trim()) return;
 

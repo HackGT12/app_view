@@ -454,6 +454,8 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, onBack }) =
   const [matchData, setMatchData] = useState({
     homeTeam: { name: 'Falcons', flag: '🏈', score: 0 },
     awayTeam: { name: 'Buccaneers', flag: '🏴‍☠️', score: 0 },
+    homeTeamName: 'Falcons',
+    awayTeamName: 'Buccaneers',
     clock: '15:00',
   });  
 
