@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { collection, getDocs, orderBy, query, where, doc, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { db } from "../firebaseConfig";
-import { FirebaseService } from "../utils/firebaseService";
+import { FirebaseService } from "@/utils/firebaseService";
 import LightningFlash from './LightningFlash';
 import ParticleEffect from './ParticleEffect';
 

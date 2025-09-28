@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAuth } from 'firebase/auth';
-import { FirebaseService, UserData } from '../../utils/firebaseService';
+import { FirebaseService, UserData } from '@/utils/firebaseService';
 
 const { width } = Dimensions.get('window');
 

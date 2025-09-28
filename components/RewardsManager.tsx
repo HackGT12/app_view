@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAuth } from 'firebase/auth';
-import { FirebaseService, Reward, UserData } from '../utils/firebaseService';
+import { FirebaseService, Reward, UserData } from '@/utils/firebaseService';
 
 const C_BG = '#01161E';
 const C_CARD = '#124559';

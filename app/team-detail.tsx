@@ -9,12 +9,14 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
-import { FirebaseService } from '../utils/firebaseService';
+import { FirebaseService } from '@/utils/firebaseService';
 import { useLocalSearchParams, router } from 'expo-router';
 import GameSelection from '../components/GameSelection';
 import LiveBetsTab from '../components/LiveBetsTab';
 import LeaderboardTab from '../components/LeaderboardTab';
 import { getAuth } from 'firebase/auth';
+// add this import
+import { Slider } from '@miblanchard/react-native-slider';
 import {
   getFirestore,
   collection,

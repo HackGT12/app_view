@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { getAuth } from 'firebase/auth';
-import { FirebaseService } from '../utils/firebaseService';
+import { FirebaseService } from '@/utils/firebaseService';
 
 const CoinManager: React.FC = () => {
   const [loading, setLoading] = useState(false);

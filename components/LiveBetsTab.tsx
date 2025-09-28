@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput, Modal } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { FirebaseService } from '../utils/firebaseService';
+import { FirebaseService } from '@/utils/firebaseService';
 
 interface GroupLine {
   id: string;
