@@ -7,7 +7,8 @@ import {
   query, 
   where,
   arrayUnion,
-  increment 
+  increment,
+  setDoc
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
@@ -223,5 +224,48 @@ export class FirebaseService {
     }
     
     return streak;
+  }
+
+  // Create a new group bet (saves to groupLines collection)
+  static async createGroupBet(question: string, minRange: number, maxRange: number, createdBy: string): Promise<string | null> {
+    try {
+      const groupLine = {
+        question,
+        min: minRange,
+        max: maxRange,
+        active: true,
+        createdBy,
+        createdAt: new Date()
+      };
+
+      const docRef = doc(collection(db, 'groupLines'));
+      await setDoc(docRef, groupLine);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating group bet:', error);
+      return null;
+    }
+  }
+
+  // Set the actual answer for a group line (creator only)
+  static async setGroupLineAnswer(lineId: string, actual: number, userId: string): Promise<boolean> {
+    try {
+      const lineRef = doc(db, 'groupLines', lineId);
+      const lineSnap = await getDoc(lineRef);
+      
+      if (!lineSnap.exists()) return false;
+      
+      const lineData = lineSnap.data();
+      if (lineData.createdBy !== userId) return false;
+      
+      await updateDoc(lineRef, {
+        actual,
+        active: false
+      });
+      return true;
+    } catch (error) {
+      console.error('Error setting group line answer:', error);
+      return false;
+    }
   }
 }

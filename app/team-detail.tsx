@@ -8,7 +8,9 @@ import {
   Alert,
   TextInput,
   Dimensions,
+  Modal,
 } from 'react-native';
+import { FirebaseService } from '../utils/firebaseService';
 import Slider from '@react-native-community/slider';
 import { useLocalSearchParams, router } from 'expo-router';
 import { getAuth } from 'firebase/auth';
@@ -76,6 +78,13 @@ export default function TeamDetail() {
   const [gameScores, setGameScores] = useState<GameScores>({});
   const [connectionStatus, setConnectionStatus] = useState('Disconnected');
   const [loading, setLoading] = useState(true);
+  const [createBetModal, setCreateBetModal] = useState(false);
+  const [newBetQuestion, setNewBetQuestion] = useState('');
+  const [newBetMin, setNewBetMin] = useState('');
+  const [newBetMax, setNewBetMax] = useState('');
+  const [answerModal, setAnswerModal] = useState(false);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [answerValue, setAnswerValue] = useState('');
 
   const calculatePlayerScore = (playerBets: {[lineId: string]: PlayerResponse}, actualScores: GameScores): number => {
     let totalScore = 0;
@@ -84,7 +93,16 @@ export default function TeamDetail() {
       const groupLine = groupLines.find(gl => gl.id === lineId);
       if (!groupLine) return;
       
-      const actualScore = groupLine.question.includes('team 1') ? actualScores.homeTeamScore : actualScores.awayTeamScore;
+      let actualScore: number | undefined;
+      
+      // Check if this is a custom group bet with actual value set
+      if (groupLine.actual !== undefined) {
+        actualScore = groupLine.actual;
+      } else {
+        // Use WebSocket scores for default bets
+        actualScore = groupLine.question.includes('team 1') ? actualScores.homeTeamScore : actualScores.awayTeamScore;
+      }
+      
       if (actualScore === undefined) return;
       
       const wasCorrect = (bet.type === 'over' && actualScore > bet.line) || 
@@ -134,8 +152,7 @@ export default function TeamDetail() {
 
   const fetchGroupLines = async () => {
     try {
-      const q = query(collection(db, 'groupLines'), where('active', '==', true));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(collection(db, 'groupLines'));
       const lines: GroupLine[] = [];
       
       querySnapshot.forEach((doc) => {
@@ -243,6 +260,65 @@ export default function TeamDetail() {
     } catch (error) {
       console.error('Error saving bet:', error);
       Alert.alert('Error', 'Failed to save bet');
+    }
+  };
+
+  const handleCreateBet = async () => {
+    if (!user || !newBetQuestion.trim() || !newBetMin || !newBetMax) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    const min = parseFloat(newBetMin);
+    const max = parseFloat(newBetMax);
+
+    if (isNaN(min) || isNaN(max) || min >= max) {
+      Alert.alert('Error', 'Please enter valid range values (min < max)');
+      return;
+    }
+
+    try {
+      const betId = await FirebaseService.createGroupBet(newBetQuestion.trim(), min, max, user.uid);
+      if (betId) {
+        Alert.alert('Success', 'Group bet created successfully!');
+        setNewBetQuestion('');
+        setNewBetMin('');
+        setNewBetMax('');
+        setCreateBetModal(false);
+        fetchGroupLines();
+      } else {
+        Alert.alert('Error', 'Failed to create group bet');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create group bet');
+    }
+  };
+
+  const handleSetAnswer = async () => {
+    if (!user || !selectedLineId || !answerValue.trim()) {
+      Alert.alert('Error', 'Please enter an answer');
+      return;
+    }
+
+    const answer = parseFloat(answerValue);
+    if (isNaN(answer)) {
+      Alert.alert('Error', 'Please enter a valid number');
+      return;
+    }
+
+    try {
+      const success = await FirebaseService.setGroupLineAnswer(selectedLineId, answer, user.uid);
+      if (success) {
+        Alert.alert('Success', 'Answer set! Bet is now closed.');
+        setAnswerValue('');
+        setAnswerModal(false);
+        setSelectedLineId(null);
+        fetchGroupLines();
+      } else {
+        Alert.alert('Error', 'Failed to set answer');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to set answer');
     }
   };
 
@@ -361,9 +437,34 @@ export default function TeamDetail() {
           </View>
         ) : activeTab === 'bets' ? (
           <View style={styles.betsSection}>
-            <Text style={styles.sectionTitle}>Active Live Bets</Text>
+            {gameScores.homeTeamScore !== undefined && (
+              <View style={styles.liveScoreContainer}>
+                <Text style={styles.liveScoreTitle}>Live Score</Text>
+                <View style={styles.scoreDisplay}>
+                  <View style={styles.scoreTeam}>
+                    <Text style={styles.scoreTeamName}>Falcons</Text>
+                    <Text style={styles.scoreNumber}>{gameScores.homeTeamScore}</Text>
+                  </View>
+                  <Text style={styles.scoreSeparator}>-</Text>
+                  <View style={styles.scoreTeam}>
+                    <Text style={styles.scoreTeamName}>Buccaneers</Text>
+                    <Text style={styles.scoreNumber}>{gameScores.awayTeamScore || 0}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
             
-            {groupLines.map((groupLine) => {
+            <View style={styles.betsHeader}>
+              <Text style={styles.sectionTitle}>Active Live Bets</Text>
+              <TouchableOpacity 
+                style={styles.createBetButton}
+                onPress={() => setCreateBetModal(true)}
+              >
+                <Text style={styles.createBetButtonText}>+ Create Bet</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {groupLines.filter(line => line.active).map((groupLine) => {
               const playerResponse = playerResponses[groupLine.id];
               const hasAnswered = !!playerResponse;
               
@@ -372,6 +473,20 @@ export default function TeamDetail() {
                   <View style={styles.betCardHeader}>
                     <Text style={styles.questionText}>{groupLine.question}</Text>
                     <Text style={styles.rangeText}>Range: {groupLine.min} - {groupLine.max}</Text>
+                    {groupLine.createdBy === user?.uid && groupLine.active && (
+                      <TouchableOpacity 
+                        style={styles.setAnswerButton}
+                        onPress={() => {
+                          setSelectedLineId(groupLine.id);
+                          setAnswerModal(true);
+                        }}
+                      >
+                        <Text style={styles.setAnswerButtonText}>Set Answer</Text>
+                      </TouchableOpacity>
+                    )}
+                    {groupLine.actual !== undefined && (
+                      <Text style={styles.actualText}>Actual: {groupLine.actual}</Text>
+                    )}
                   </View>
                   
                   {hasAnswered ? (
@@ -449,6 +564,7 @@ export default function TeamDetail() {
                               }}
                               keyboardType="numeric"
                               maxLength={3}
+                              returnKeyType="done"
                             />
                           </View>
                         </View>
@@ -466,7 +582,7 @@ export default function TeamDetail() {
               );
             })}
             
-            {groupLines.length === 0 && (
+            {groupLines.filter(line => line.active).length === 0 && (
               <View style={styles.noBetsContainer}>
                 <Text style={styles.noBetsIcon}>🎲</Text>
                 <Text style={styles.noBetsTitle}>No Active Bets</Text>
@@ -475,25 +591,42 @@ export default function TeamDetail() {
                 </Text>
               </View>
             )}
+            
+            {groupLines.filter(line => !line.active).length > 0 && (
+              <>
+                <Text style={styles.closedBetsTitle}>Closed Bets</Text>
+                {groupLines.filter(line => !line.active).map((groupLine) => {
+                  const playerResponse = playerResponses[groupLine.id];
+                  const hasAnswered = !!playerResponse;
+                  
+                  return (
+                    <View key={groupLine.id} style={[styles.betCard, styles.closedBetCard]}>
+                      <View style={styles.betCardHeader}>
+                        <Text style={styles.questionText}>{groupLine.question}</Text>
+                        <Text style={styles.rangeText}>Range: {groupLine.min} - {groupLine.max}</Text>
+                        {groupLine.actual !== undefined && (
+                          <Text style={styles.actualText}>Actual: {groupLine.actual}</Text>
+                        )}
+                      </View>
+                      
+                      {hasAnswered && (
+                        <View style={styles.answeredContainer}>
+                          <View style={styles.answeredBadge}>
+                            <Text style={styles.checkmark}>✓</Text>
+                          </View>
+                          <Text style={styles.answeredText}>
+                            Your bet: {playerResponse.type.toUpperCase()} {playerResponse.line}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </>
+            )}
           </View>
         ) : (
           <View style={styles.membersSection}>
-            {gameScores.homeTeamScore !== undefined && (
-              <View style={styles.liveScoreContainer}>
-                <Text style={styles.liveScoreTitle}>Live Score</Text>
-                <View style={styles.scoreDisplay}>
-                  <View style={styles.scoreTeam}>
-                    <Text style={styles.scoreTeamName}>Falcons</Text>
-                    <Text style={styles.scoreNumber}>{gameScores.homeTeamScore}</Text>
-                  </View>
-                  <Text style={styles.scoreSeparator}>-</Text>
-                  <View style={styles.scoreTeam}>
-                    <Text style={styles.scoreTeamName}>Buccaneers</Text>
-                    <Text style={styles.scoreNumber}>{gameScores.awayTeamScore || 0}</Text>
-                  </View>
-                </View>
-              </View>
-            )}
             
             {teamData && (
               <View style={styles.teamInfoContainer}>
@@ -567,6 +700,113 @@ export default function TeamDetail() {
           </View>
         )}
       </ScrollView>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={createBetModal}
+        onRequestClose={() => setCreateBetModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Create Group Bet</Text>
+              <TouchableOpacity onPress={() => setCreateBetModal(false)}>
+                <Text style={styles.closeButton}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalContent}>
+              <Text style={styles.inputLabel}>Question</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter your question..."
+                placeholderTextColor="#6B7280"
+                value={newBetQuestion}
+                onChangeText={setNewBetQuestion}
+                multiline
+              />
+              
+              <View style={styles.rangeContainer}>
+                <View style={styles.rangeInputContainer}>
+                  <Text style={styles.inputLabel}>Min</Text>
+                  <TextInput
+                    style={styles.rangeInput}
+                    placeholder="0"
+                    placeholderTextColor="#6B7280"
+                    value={newBetMin}
+                    onChangeText={setNewBetMin}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                    blurOnSubmit={true}
+                  />
+                </View>
+                
+                <Text style={styles.rangeSeparator}>to</Text>
+                
+                <View style={styles.rangeInputContainer}>
+                  <Text style={styles.inputLabel}>Max</Text>
+                  <TextInput
+                    style={styles.rangeInput}
+                    placeholder="100"
+                    placeholderTextColor="#6B7280"
+                    value={newBetMax}
+                    onChangeText={setNewBetMax}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                    blurOnSubmit={true}
+                  />
+                </View>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.createButton}
+                onPress={handleCreateBet}
+              >
+                <Text style={styles.createButtonText}>Create Bet</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={answerModal}
+        onRequestClose={() => setAnswerModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Set Answer</Text>
+              <TouchableOpacity onPress={() => setAnswerModal(false)}>
+                <Text style={styles.closeButton}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalContent}>
+              <Text style={styles.inputLabel}>Actual Result</Text>
+              <TextInput
+                style={styles.rangeInput}
+                placeholder="Enter the actual result"
+                placeholderTextColor="#6B7280"
+                value={answerValue}
+                onChangeText={setAnswerValue}
+                keyboardType="numeric"
+                returnKeyType="done"
+              />
+              
+              <TouchableOpacity 
+                style={styles.createButton}
+                onPress={handleSetAnswer}
+              >
+                <Text style={styles.createButtonText}>Set Answer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1170,5 +1410,137 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
+  },
+  betsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  createBetButton: {
+    backgroundColor: '#00F5FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  createBetButtonText: {
+    color: '#0A0E27',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    backgroundColor: 'rgba(16, 23, 42, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.3)',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  closeButton: {
+    fontSize: 28,
+    color: '#6B7280',
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    gap: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  modalInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.3)',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  rangeContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 16,
+  },
+  rangeInputContainer: {
+    flex: 1,
+  },
+  rangeInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 245, 255, 0.3)',
+  },
+  rangeSeparator: {
+    color: '#6B7280',
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  createButton: {
+    backgroundColor: '#00F5FF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  createButtonText: {
+    color: '#0A0E27',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  setAnswerButton: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  setAnswerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  actualText: {
+    fontSize: 14,
+    color: '#22C55E',
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  closedBetsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#6B7280',
+    marginTop: 32,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  closedBetCard: {
+    opacity: 0.7,
+    borderColor: 'rgba(107, 114, 128, 0.3)',
   },
 });
