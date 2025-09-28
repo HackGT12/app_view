@@ -16,7 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, where, doc, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { db } from "../firebaseConfig";
 import { FirebaseService } from "../utils/firebaseService";
@@ -89,8 +89,8 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
   onBack, 
   league 
 }) => {
-  const [timeLeft, setTimeLeft] = useState(45);
-  const [coins, setCoins] = useState(300);
+  const [playsUntilMicro, setPlaysUntilMicro] = useState(5);
+  const [coins, setCoins] = useState(0);
   const [showMicroBet, setShowMicroBet] = useState(false);
   const [currentMicroBet, setCurrentMicroBet] = useState<MicroBet | null>(null);
   const [showParticles, setShowParticles] = useState(false);
@@ -98,6 +98,9 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
   const [previousMicroBets, setPreviousMicroBets] = useState<MicroBetData[]>([]);
   const [totalRaised, setTotalRaised] = useState(0);
   const [currentMicroBetId, setCurrentMicroBetId] = useState<string | null>(null);
+  const [userVotes, setUserVotes] = useState<Record<string, string>>({});
+  const [rewardedBets, setRewardedBets] = useState<Set<string>>(new Set());
+  const [renderTrigger, setRenderTrigger] = useState(0);
 
   const insets = useSafeAreaInsets();
 
@@ -283,13 +286,24 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
           }));
         }
     
-        // ✅ add donation from this play
+        // ✅ set total raised from event
         if (typeof data?.totalMoneyDonated === "number") {
-          setTotalRaised((prev) => prev + data.totalMoneyDonated);
+          setTotalRaised(data.totalMoneyDonated);
+        }
+
+        // ✅ update plays until next microbet
+        if (typeof data?.playsUntilMicro === "number") {
+          setPlaysUntilMicro(data.playsUntilMicro);
         }
     
-        // 🚀 NEW: trigger micro bet whenever a new play arrives
-        triggerMicroBet();
+        // 🚀 NEW: trigger micro bet only when microbet_created event is received
+        if (data.type === 'microbet_created' && data.microbetId) {
+          console.log('🎯 Microbet created event received:', data.microbetId);
+          triggerSpecificMicroBet(data.microbetId);
+        }
+
+        // 🎉 Check pending bets for wins on every WebSocket event
+        checkPendingBetsForWins();
     
       } catch (err) {
         console.error('Bad WS data:', err);
@@ -309,6 +323,90 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
       wsRef.current = null;
     };
   }, [selectedLeague]);
+
+  const triggerSpecificMicroBet = async (microbetId: string) => {
+    try {
+      const docRef = doc(db, "microBets", microbetId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data() as MicroBetData;
+        
+        // ✅ normalize options
+        let normalizedOptions: MicroBetOption[] = [];
+        if (Array.isArray(data.options)) {
+          normalizedOptions = data.options;
+        } else if (data.options && typeof data.options === "object") {
+          normalizedOptions = Object.keys(data.options).map((key) => ({
+            id: key,
+            ...(data.options as any)[key],
+          }));
+        }
+
+        const microbet = {
+          ...data,
+          id: docSnap.id,
+          options: normalizedOptions,
+        };
+
+        setCurrentMicroBet({
+          question: microbet.question,
+          optionA: microbet.options[0]?.text || "Option A",
+          optionB: microbet.options[1]?.text || "Option B",
+          emoji: "⚡",
+        });
+        setCurrentMicroBetId(microbet.id);
+
+        // ✅ add to previous bets as pending
+        setPreviousMicroBets((prev) => [
+          { ...microbet, status: "pending" },
+          ...prev,
+        ]);
+
+        // Show microbet popup with animations
+        setShowLightning(true);
+        setShowParticles(true);
+
+        if (Platform.OS === "ios") {
+          Vibration.vibrate([0, 100, 50, 100, 50, 200]);
+        } else {
+          Vibration.vibrate([100, 50, 100, 50, 200]);
+        }
+
+        Animated.sequence([
+          Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        ]).start();
+
+        setTimeout(() => {
+          setShowLightning(false);
+          setShowMicroBet(true);
+
+          Animated.parallel([
+            Animated.spring(popupScale, {
+              toValue: 1,
+              tension: 100,
+              friction: 6,
+              useNativeDriver: true,
+            }),
+            Animated.timing(popupOpacity, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }, 800);
+
+        setTimeout(() => setShowParticles(false), 2000);
+      } else {
+        console.error("❌ Microbet not found:", microbetId);
+      }
+    } catch (error) {
+      console.error("❌ Failed to fetch specific microbet:", error);
+    }
+  };
 
   const triggerMicroBet = async () => {
     try {
@@ -404,13 +502,20 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
     // Success vibration
     Vibration.vibrate(200);
 
-    // Record vote in Firebase
+    // Record vote in Firebase and track locally
     const auth = getAuth();
     const user = auth.currentUser;
     if (user && currentMicroBetId) {
       try {
         const optionId = direction === 'left' ? 'opt1' : 'opt2';
         await FirebaseService.recordMicroBetVote(currentMicroBetId, user.uid, optionId);
+        
+        // Track user's vote locally
+        setUserVotes(prev => ({
+          ...prev,
+          [currentMicroBetId]: optionId
+        }));
+        
         console.log('✅ Vote recorded successfully');
       } catch (error) {
         console.error('❌ Failed to record vote:', error);
@@ -435,9 +540,6 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
       popupScale.setValue(0);
       popupOpacity.setValue(0);
       
-      const earned = Math.floor(Math.random() * 100) + 25;
-      setCoins(prev => prev + earned);
-      
       // Show success particles
       setShowParticles(true);
       setTimeout(() => setShowParticles(false), 1500);
@@ -454,10 +556,114 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
     });
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const getBetResultColor = (bet: MicroBetData) => {
+    const userVote = userVotes[bet.id];
+    const freshAnswer = freshAnswers[bet.id] || bet.answer;
+    
+    if (!userVote) {
+      return ['rgba(100, 116, 139, 0.3)', 'rgba(100, 116, 139, 0.1)'];
+    }
+    
+    if (!freshAnswer) {
+      return ['rgba(100, 116, 139, 0.3)', 'rgba(100, 116, 139, 0.1)'];
+    }
+    
+    if (userVote === freshAnswer) {
+      return ['rgba(34, 197, 94, 0.3)', 'rgba(34, 197, 94, 0.1)'];
+    } else {
+      return ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)'];
+    }
+  };
+
+  const [freshAnswers, setFreshAnswers] = useState<Record<string, string>>({});
+
+  const getBetResultStatus = (bet: MicroBetData) => {
+    const userVote = userVotes[bet.id];
+    const answer = freshAnswers[bet.id] || bet.answer;
+    
+    console.log(`📊 BET ${bet.id}: userVote=${userVote}, bet.answer=${bet.answer}, freshAnswer=${freshAnswers[bet.id]}, finalAnswer=${answer}`);
+    
+    if (!userVote) {
+      return { icon: 'help-circle', color: '#64748b', text: 'No Vote' };
+    }
+    
+    if (!answer) {
+      return { icon: 'time', color: '#64748b', text: 'Pending' };
+    }
+    
+    if (userVote === answer) {
+      return { icon: 'checkmark-circle', color: '#22c55e', text: 'Correct' };
+    } else {
+      return { icon: 'close-circle', color: '#ef4444', text: 'Wrong' };
+    }
+  };
+
+  const updateCoins = async (amount: number) => {
+    console.log(`💰 updateCoins called with amount: ${amount}`);
+    const auth = getAuth();
+    const user = auth.currentUser;
+    
+    if (user) {
+      console.log(`👤 User logged in: ${user.uid}`);
+      try {
+        await FirebaseService.updateUserCoins(user.uid, amount);
+        console.log(`✅ Firebase coins updated, updating local state`);
+        setCoins(prev => {
+          console.log(`💰 Coins: ${prev} + ${amount} = ${prev + amount}`);
+          return prev + amount;
+        });
+      } catch (error) {
+        console.error('❌ Failed to update coins:', error);
+        setCoins(prev => {
+          console.log(`💰 Local fallback - Coins: ${prev} + ${amount} = ${prev + amount}`);
+          return prev + amount;
+        });
+      }
+    } else {
+      console.log('⚠️ No user logged in, updating locally only');
+      setCoins(prev => {
+        console.log(`💰 Local only - Coins: ${prev} + ${amount} = ${prev + amount}`);
+        return prev + amount;
+      });
+    }
+  };
+
+  const checkPendingBetsForWins = async () => {
+    try {
+      const pendingBets = previousMicroBets.filter(bet => !bet.answer && userVotes[bet.id]);
+      console.log(`🔍 Found ${pendingBets.length} pending bets:`, pendingBets.map(b => b.id));
+      
+      for (const bet of pendingBets) {
+        const docRef = doc(db, "microBets", bet.id);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const fullData = await docSnap.data();
+          const firebaseAnswer = fullData?.answer;
+          console.log(`🔥 Full Firebase data for ${bet.id}:`, fullData);
+          console.log(`🔥 Firebase answer for ${bet.id}: ${firebaseAnswer}`);
+          
+          if (firebaseAnswer) {
+            console.log(`🔄 Updating ${bet.id} with answer: ${firebaseAnswer}`);
+            
+            setPreviousMicroBets(prev => 
+              prev.map(b => b.id === bet.id ? { ...b, answer: firebaseAnswer } : b)
+            );
+            
+            // Force re-render
+            setRenderTrigger(prev => prev + 1);
+            
+            if (userVotes[bet.id] === firebaseAnswer && !rewardedBets.has(bet.id)) {
+              setRewardedBets(prev => new Set(prev).add(bet.id));
+              updateCoins(10);
+              console.log(`🎉 You won ${bet.id}! +10 coins`);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
   };
 
   return (
@@ -635,9 +841,11 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
             <Text style={styles.pastBetsTitle}>Recent Micro Bets</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.betsScroll}>
-            {previousMicroBets.map((bet, index) => (
+            {previousMicroBets.map((bet, index) => {
+              const resultStatus = getBetResultStatus(bet);
+              return (
               <Animated.View
-                key={index}
+                key={`${bet.id}-${bet.answer || 'pending'}-${renderTrigger}`}
                 style={[
                   styles.betCard,
                   {
@@ -651,23 +859,21 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
                 ]}
               >
                 <LinearGradient
-                  colors={(bet.status === 'closed' 
-                    ? ['rgba(34, 197, 94, 0.3)', 'rgba(34, 197, 94, 0.1)']
-                    : ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']) as [string, string]}
+                  colors={getBetResultColor(bet) as [string, string]}
                   style={styles.betCardGradient}
                 >
                   <View style={styles.betHeader}>
                     <View style={styles.betStatus}>
                       <Ionicons 
-                        name={bet.answer ? 'checkmark-circle' : 'help-circle'} 
+                        name={resultStatus.icon as any} 
                         size={16} 
-                        color={bet.answer ? '#22c55e' : '#ef4444'} 
+                        color={resultStatus.color} 
                       />
                       <Text style={[
                         styles.betResult,
-                        { color: bet.answer ? '#22c55e' : '#ef4444' }
+                        { color: resultStatus.color }
                       ]}>
-                        {bet.answer ? 'Resolved' : 'Pending'}
+                        {resultStatus.text}
                       </Text>
                     </View>
                   </View>
@@ -687,7 +893,8 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
                   </View>
                 </LinearGradient>
               </Animated.View>
-            ))}
+              );
+            })}
           </ScrollView>
         </View>
       </Animated.ScrollView>
@@ -702,13 +909,13 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
             styles.nextBetCard,
             {
               transform: [{
-                scale: timeLeft <= 10 ? pulseAnim : new Animated.Value(1)
+                scale: playsUntilMicro <= 2 ? pulseAnim : new Animated.Value(1)
               }]
             }
           ]}
         >
           <LinearGradient
-            colors={(timeLeft <= 10 
+            colors={(playsUntilMicro <= 2 
               ? ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']
               : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']) as [string, string]}
             style={styles.timerGradient}
@@ -717,15 +924,15 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
               <Ionicons 
                 name="flash" 
                 size={18} 
-                color={timeLeft <= 10 ? "#ef4444" : "#4ade80"} 
+                color={playsUntilMicro <= 2 ? "#ef4444" : "#4ade80"} 
               />
               <Text style={styles.nextBetLabel}>Next Micro Bet</Text>
             </View>
             <Text style={[
               styles.nextBetTime,
-              { color: timeLeft <= 10 ? "#ef4444" : "#ffffff" }
+              { color: playsUntilMicro <= 2 ? "#ef4444" : "#ffffff" }
             ]}>
-              {formatTime(timeLeft)}
+              {playsUntilMicro} plays
             </Text>
           </LinearGradient>
         </Animated.View>
