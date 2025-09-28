@@ -33,7 +33,7 @@ const MODEL_OPTIONS = [
   'NCAA Football',
   'Premier League',
   'Formula 1',
-  'ChatGPT',
+  'General',
 ];
 
 const BEGINNER_RESPONSES = {

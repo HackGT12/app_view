@@ -6,15 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  Alert,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAuth } from 'firebase/auth';
-import { FirebaseService, UserData, Reward } from '../../utils/firebaseService';
+import { FirebaseService, UserData } from '../../utils/firebaseService';
 import RewardsManager from '../../components/RewardsManager';
 
 const { width } = Dimensions.get('window');
@@ -44,14 +42,6 @@ const DEFAULT_USER_DATA = {
   rewardsProgress: 75,
   rewardLevel: 2,
 };
-
-const PROMO_CARDS = [
-  { id: '1', coins: 100, title: 'Daily Login', description: 'Login 7 days straight', progress: 85 },
-  { id: '2', coins: 200, title: 'Winning Streak', description: 'Win 5 bets in a row', progress: 40 },
-  { id: '3', coins: 300, title: 'Charity Champion', description: 'Help raise $500 for charity', progress: 92 },
-];
-
-
 
 /** Swipeable Active Bets (inside Stats) */
 const ACTIVE_BETS = [
@@ -97,8 +87,6 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
-
-
   const displayUserData = userData ? {
     ...DEFAULT_USER_DATA,
     ...userData,
@@ -107,33 +95,6 @@ export default function ProfileScreen() {
     ...DEFAULT_USER_DATA,
     name: user?.displayName || DEFAULT_USER_DATA.username,
     coins: 0
-  };
-
-  const renderProgressBar = () => {
-    const currentRange = displayUserData.rewardLevel * 100;
-    const nextRange = (displayUserData.rewardLevel + 1) * 100;
-    const progress = displayUserData.rewardsProgress;
-
-    return (
-      <View style={styles.progressSection}>
-        <View style={styles.progressHeader}>
-          <Text style={styles.progressTitle}>Rewards Progress</Text>
-          <Text style={styles.progressRange}>{currentRange} - {nextRange} points</Text>
-        </View>
-
-        <View style={styles.progressBarContainer}>
-          <View style={styles.progressBarBackground}>
-            <LinearGradient
-              colors={[C_ACCENT, C_TEXT]}
-              style={[styles.progressBarFill, { width: `${progress}%` }]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-          </View>
-          <Text style={styles.progressText}>{displayUserData.rewardsProgress}/100 points</Text>
-        </View>
-      </View>
-    );
   };
 
   /** Active Bets carousel – inside Stats page */
@@ -191,7 +152,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
+      <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={C_ACCENT} />
           <Text style={styles.loadingText}>Loading profile...</Text>
@@ -202,7 +163,7 @@ export default function ProfileScreen() {
 
   if (!user) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
+      <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Please log in to view your profile</Text>
         </View>
@@ -211,7 +172,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
       <View style={styles.header}>
         <View style={styles.profileSection}>
           <View style={styles.avatar}>
@@ -288,18 +249,6 @@ export default function ProfileScreen() {
                 </View>
               ))}
             </View>
-
-            {/* Favorite Leagues */}
-            <View style={{ marginTop: 8, marginBottom: 24 }}>
-              <Text style={styles.sectionTitle}>Favorite Leagues</Text>
-              <View style={styles.leaguesList}>
-                {(displayUserData.favoriteLeagues || []).map((league, index) => (
-                  <View key={index} style={styles.leagueChip}>
-                    <Text style={styles.leagueChipText}>{league}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
           </>
         )}
 
@@ -312,12 +261,7 @@ export default function ProfileScreen() {
               </View>
             ) : (
               <>
-                {/* Progress */}
-                {renderProgressBar()}
-
-
-
-                {/* Rewards Manager */}
+                {/* Rewards Manager only (progress bar removed) */}
                 <RewardsManager />
               </>
             )}
@@ -405,30 +349,6 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 20, fontWeight: '900', color: C_TEXT },
   statLabel: { fontSize: 12, color: C_SUB, marginTop: 4 },
 
-  // Favorite leagues
-  leaguesList: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SCREEN_PAD },
-  leagueChip: {
-    backgroundColor: C_BG,
-    borderWidth: 1,
-    borderColor: C_ACCENT,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  leagueChipText: { fontSize: 12, fontWeight: '800', color: C_TEXT },
-
-  // Rewards progress
-  progressSection: { marginBottom: 24 },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: SCREEN_PAD },
-  progressTitle: { fontSize: 20, fontWeight: '700', color: C_TEXT },
-  progressRange: { fontSize: 14, color: C_SUB, fontWeight: '500' },
-  progressBarContainer: { marginBottom: 8, paddingHorizontal: SCREEN_PAD },
-  progressBarBackground: { height: 8, backgroundColor: C_CARD, borderRadius: 4, marginBottom: 8, borderWidth: 1, borderColor: C_ACCENT },
-  progressBarFill: { height: 8, borderRadius: 4 },
-  progressText: { fontSize: 14, color: C_SUB, textAlign: 'center' },
-
   // Active Bets ticket styles (stretched)
   activeScrollView: { flexGrow: 0 },
   activeScrollContent: { paddingVertical: 8 },
@@ -470,6 +390,4 @@ const styles = StyleSheet.create({
   // Loading
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
   loadingText: { fontSize: 16, color: C_SUB, marginTop: 12 },
-
-
 });

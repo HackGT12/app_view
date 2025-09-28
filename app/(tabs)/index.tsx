@@ -1098,7 +1098,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 60 }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
       <StatusBar barStyle="light-content" backgroundColor="#01161E" translucent={false} />
       
       <View style={styles.header}>
