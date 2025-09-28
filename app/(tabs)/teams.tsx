@@ -319,7 +319,7 @@ const TeamsScreen: React.FC = () => {
                     onChangeText={setNewTeamName}
                   />
                   <TouchableOpacity style={styles.actionButton} onPress={handleCreateTeam}>
-                    <Text style={styles.actionButtonText}>🎯 Create Team</Text>
+                    <Text style={styles.actionButtonText}>Create Team</Text>
                   </TouchableOpacity>
                   <Text style={styles.helpText}>
                     You'll get a 6-digit code to share with friends
