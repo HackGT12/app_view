@@ -207,7 +207,7 @@ export default function HomeScreen() {
   const cardHeight = availableHeight * 0.75; // Use 75% of available height
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
+    <View style={[styles.container, { paddingTop: insets.top}]}>
       <StatusBar barStyle="light-content" backgroundColor="#01161E" translucent={false} />
       
       <View style={styles.header}>
@@ -239,7 +239,6 @@ export default function HomeScreen() {
                 style={[
                   styles.leagueCard,
                   {
-                    height: cardHeight,
                     marginRight: index === LEAGUES.length - 1 ? 0 : CARD_SPACING,
                     opacity: isActive ? 1 : 0.7,
                     transform: [{ scale: isActive ? 1 : 0.95 }],
@@ -291,13 +290,14 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 30,
-    marginBottom: 30,
+    marginBottom: 10,
+    marginTop: 20,
   },
   title: {
     fontSize: 32,
     fontWeight: '800',
     color: '#EFF6E0',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 16,
@@ -317,6 +317,7 @@ const styles = StyleSheet.create({
   },
   leagueCard: {
     width: CARD_WIDTH,
+    aspectRatio: 1,
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 8,
