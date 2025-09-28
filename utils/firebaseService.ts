@@ -87,6 +87,19 @@ export class FirebaseService {
     }
   }
 
+  static async recordMicroBetVote(betId: string, userId: string, optionId: string) {
+    try {
+      await updateDoc(doc(db, 'microBets', betId), {
+        [`options.${optionId}.votes`]: increment(1),
+        [`voters.${userId}`]: optionId
+      });
+      return true;
+    } catch (error) {
+      console.error('Error recording micro bet vote:', error);
+      return false;
+    }
+  }
+
   // Get all available rewards
   static async getAvailableRewards(): Promise<Reward[]> {
     try {
@@ -238,8 +251,11 @@ export class FirebaseService {
         createdAt: new Date()
       };
 
-      const docRef = doc(collection(db, 'groupLines'));
-      await setDoc(docRef, groupLine);
+      const docRef = doc(collection(db, 'microBets'));
+      await setDoc(docRef, {
+        ...groupLine,
+        gameId: "default",  // 👈 tie bet to a game
+      });
       return docRef.id;
     } catch (error) {
       console.error('Error creating group bet:', error);

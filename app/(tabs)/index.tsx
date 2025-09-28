@@ -104,7 +104,7 @@ const LEAGUES: League[] = [
 // Sample room data for each league
 const LEAGUE_ROOMS: Record<string, GameRoom[]> = {
   nfl: [
-    { id: 'nfl-1', name: 'Sunday Night Football', homeTeam: 'Falcons', awayTeam: 'Buccaneers', homeFlag: '🏈', awayFlag: '🏴☠️', homeScore: 14, awayScore: 10, clock: '15:00', isLive: true, viewers: 15420, totalRaised: 89350 },
+    { id: 'nfl-1', name: 'Sunday Night Football', homeTeam: 'Falcons', awayTeam: 'Buccaneers', homeFlag: '🏈', awayFlag: '☠️', homeScore: 14, awayScore: 10, clock: '15:00', isLive: true, viewers: 15420, totalRaised: 89350 },
     { id: 'nfl-2', name: 'Monday Night Football', homeTeam: 'Cowboys', awayTeam: 'Giants', homeFlag: '⭐', awayFlag: '🗽', homeScore: 21, awayScore: 17, clock: '8:45', isLive: true, viewers: 18750, totalRaised: 125680 },
     { id: 'nfl-3', name: 'Primetime Showdown', homeTeam: 'Chiefs', awayTeam: 'Bills', homeFlag: '👑', awayFlag: '🦬', homeScore: 28, awayScore: 24, clock: '2:15', isLive: true, viewers: 22100, totalRaised: 156400 },
     { id: 'nfl-4', name: 'AFC Championship', homeTeam: 'Ravens', awayTeam: 'Bengals', homeFlag: '🐦⬛', awayFlag: '🐅', homeScore: 7, awayScore: 14, clock: '12:30', isLive: true, viewers: 19800, totalRaised: 98750 },
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   leagueName: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '800',
     color: '#FFFFFF',
     textAlign: 'center',
