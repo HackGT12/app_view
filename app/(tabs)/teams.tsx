@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -48,6 +48,7 @@ const TeamsScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'create' | 'join'>('create');
   const [newTeamName, setNewTeamName] = useState('');
   const [joinCode, setJoinCode] = useState(['', '', '', '', '', '']);
+  const inputRefs = useRef<(TextInput | null)[]>([]);
 
   const generateJoinCode = (): string => {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -160,7 +161,7 @@ const TeamsScreen: React.FC = () => {
         teams: arrayUnion(teamDoc.id),
       });
 
-      setTeams((prev) => [...prev, { id: teamDoc.id, ...teamData }]);
+      setTeams((prev) => [...prev, { ...teamData, id: teamDoc.id }]);
       setJoinCode(['', '', '', '', '', '']);
       setModalVisible(false);
       Alert.alert('Success', `Joined team: ${teamData.name}`);
@@ -329,26 +330,38 @@ const TeamsScreen: React.FC = () => {
                 <View>
                   <Text style={styles.inputLabel}>Enter Join Code</Text>
                   <View style={styles.codeInputContainer}>
-                    {joinCode.map((digit, index) => (
-                      <View key={index} style={styles.codeInputWrapper}>
-                        <TextInput
-                          style={styles.codeInput}
-                          value={digit}
-                          onChangeText={(text) => {
-                            if (text.length <= 1 && /^[0-9]*$/.test(text)) {
-                              const newCode = [...joinCode];
-                              newCode[index] = text;
-                              setJoinCode(newCode);
-                            }
-                          }}
-                          keyboardType="numeric"
-                          maxLength={1}
-                          textAlign="center"
-                        />
-                        {index === 2 && <Text style={styles.dash}>-</Text>}
-                      </View>
-                    ))}
-                  </View>
+                      {joinCode.map((digit, index) => (
+                        <View key={index} style={styles.codeInputWrapper}>
+                          <TextInput
+                            ref={(el) => { inputRefs.current[index] = el; }}
+                            style={styles.codeInput}
+                            value={digit}
+                            onChangeText={(text) => {
+                              if (/^[0-9]$/.test(text)) {
+                                const newCode = [...joinCode];
+                                newCode[index] = text;
+                                setJoinCode(newCode);
+
+                                // Move to next input automatically
+                                if (index < joinCode.length - 1) {
+                                  inputRefs.current[index + 1]?.focus();
+                                }
+                              } else if (text === '' && index > 0) {
+                                // If user deletes, go back one slot
+                                const newCode = [...joinCode];
+                                newCode[index] = '';
+                                setJoinCode(newCode);
+                                inputRefs.current[index - 1]?.focus();
+                              }
+                            }}
+                            keyboardType="numeric"
+                            maxLength={1}
+                            textAlign="center"
+                          />
+                          {index === 2 && <Text style={styles.dash}>-</Text>}
+                        </View>
+                      ))}
+                    </View>
                   <TouchableOpacity style={styles.actionButton} onPress={handleJoinTeam}>
                     <Text style={styles.actionButtonText}>🔗 Join Team</Text>
                   </TouchableOpacity>
