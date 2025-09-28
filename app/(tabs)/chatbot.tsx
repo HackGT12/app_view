@@ -17,6 +17,21 @@ import { getKnowledgeBase } from '../../utils/sportsKnowledgeBase';
 
 const { width } = Dimensions.get('window');
 
+// Cohesive palette
+const C_BG = '#01161E';
+const C_CARD = '#0F2830';
+const C_BORDER = 'rgba(255,255,255,0.08)';
+const C_BORDER_STRONG = 'rgba(255,255,255,0.12)';
+const C_TEXT = '#EFF6E0';
+const C_SUB = '#AEC3B0';
+
+// Brighter purple (matches your stat bars vibe)
+const C_PURPLE = '#7B6CF6';   // brighter than before
+const C_PURPLE_TINT = 'rgba(123,108,246,0.12)';
+
+// Subtle bot bubble gradient
+const G_BOT = ['#10343C', '#0F2830'];
+
 interface Message {
   id: string;
   text: string;
@@ -25,41 +40,29 @@ interface Message {
 }
 
 const MODEL_OPTIONS = [
-  'NFL',
-  'NBA',
-  'MLB',
-  'NHL',
-  'MLS',
-  'NCAA Football',
-  'Premier League',
-  'Formula 1',
-  'General',
+  'NFL','NBA','MLB','NHL','MLS','NCAA Football','Premier League','Formula 1','General',
 ];
 
 const BEGINNER_RESPONSES = {
   greeting:
     "Hey there! I'm here to help you understand sports betting and how our charity betting works. What would you like to know?",
   betting:
-    "Great question! In our app, you're making predictions about live game events. When you win, coins go to charity - it's betting for good! The money comes from our sponsors, not your wallet.",
+    "Great question! In our app, you're making predictions about live game events. When you win, coins go to charity — it's betting for good! The money comes from our sponsors, not your wallet.",
   rules:
     'Our betting is simple: watch the game, see a bet pop up, swipe left or right to choose. You earn coins for correct predictions, and all money raised goes to charity. No real money from you!',
   charity:
-    'Every bet contributes to our charity pot! Our sponsors fund the actual money - you just predict the outcomes. The more people participate, the more we raise for good causes.',
+    'Every bet contributes to our charity pot! Our sponsors fund the actual money — you just predict the outcomes. The more people participate, the more we raise for good causes.',
   coins:
-    'Coins are your score! Earn them by making correct predictions. You can see your coin count at the top of the app. They show your betting skills and how much you\'ve helped raise for charity.',
+    "Coins are your score! Earn them by making correct predictions. They show your betting skills and how much you've helped raise for charity.",
   default:
-    "I can help explain betting basics, our charity system, how to earn coins, or any other questions about sports betting. What interests you most?",
+    'I can help explain betting basics, our charity system, how to earn coins, or anything else about sports betting. What interests you most?',
 };
 
 export default function ChatbotScreen() {
   const insets = useSafeAreaInsets();
+
   const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: BEGINNER_RESPONSES.greeting,
-      isUser: false,
-      timestamp: new Date(),
-    },
+    { id: '1', text: BEGINNER_RESPONSES.greeting, isUser: false, timestamp: new Date() },
   ]);
   const [inputText, setInputText] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>(MODEL_OPTIONS[0]);
@@ -96,8 +99,8 @@ export default function ChatbotScreen() {
         return `API Error: ${data.error?.message || 'Unknown error'}`;
       }
       return data.choices?.[0]?.message?.content || 'Sorry, I had trouble understanding that.';
-    } catch (error) {
-      return 'Sorry, I\'m having trouble connecting right now. Please try again later.';
+    } catch {
+      return "Sorry, I'm having trouble connecting right now. Please try again later.";
     }
   };
 
@@ -145,14 +148,16 @@ export default function ChatbotScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.botAvatar}>
-          <Ionicons name="chatbubble-ellipses" size={24} color="#EFF6E0" />
+          <Ionicons name="chatbubble-ellipses" size={22} color={C_TEXT} />
         </View>
+
         <View style={styles.headerText}>
           <Text style={styles.botName}>Side Guide</Text>
+          {/* Make status purple */}
           <Text style={styles.botStatus}>Online • {selectedModel}</Text>
         </View>
 
-        {/* Model Toggle (top-right) */}
+        {/* Model Toggle */}
         <TouchableOpacity
           style={styles.modelToggle}
           onPress={() => setShowModelPicker((s) => !s)}
@@ -165,7 +170,7 @@ export default function ChatbotScreen() {
           <Ionicons
             name={showModelPicker ? 'chevron-up' : 'chevron-down'}
             size={18}
-            color="#EFF6E0"
+            color={C_TEXT}
             style={{ marginLeft: 4 }}
           />
         </TouchableOpacity>
@@ -196,7 +201,7 @@ export default function ChatbotScreen() {
                     <Text style={[styles.dropdownText, active && styles.dropdownTextActive]}>
                       {opt}
                     </Text>
-                    {active && <Ionicons name="checkmark" size={16} color="#30D158" />}
+                    {active && <Ionicons name="checkmark" size={16} color={C_PURPLE} />}
                   </TouchableOpacity>
                 );
               })}
@@ -222,7 +227,7 @@ export default function ChatbotScreen() {
           >
             {!message.isUser && (
               <View style={styles.botMessageAvatar}>
-                <Ionicons name="logo-android" size={16} color="#598392" />
+                <Ionicons name="logo-android" size={16} color={C_SUB} />
               </View>
             )}
 
@@ -236,7 +241,7 @@ export default function ChatbotScreen() {
                 <Text style={styles.userMessageText}>{message.text}</Text>
               ) : (
                 <LinearGradient
-                  colors={['#124559', '#195167ff']}
+                  colors={G_BOT}
                   style={styles.botMessageGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
@@ -248,7 +253,7 @@ export default function ChatbotScreen() {
 
             {message.isUser && (
               <View style={styles.userMessageAvatar}>
-                <Ionicons name="person" size={16} color="#01161E" />
+                <Ionicons name="person" size={16} color={C_BG} />
               </View>
             )}
           </View>
@@ -257,7 +262,7 @@ export default function ChatbotScreen() {
 
       {/* Input */}
       <View style={styles.inputContainer}>
-        {/* >>> moved prompts ABOVE the textbox <<< */}
+        {/* Quick prompts */}
         <View style={styles.quickQuestions}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {[
@@ -277,14 +282,14 @@ export default function ChatbotScreen() {
           </ScrollView>
         </View>
 
-        {/* composer */}
+        {/* Composer */}
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.textInput}
             value={inputText}
             onChangeText={setInputText}
             placeholder="Ask me about betting..."
-            placeholderTextColor="#AEC3B0"
+            placeholderTextColor={C_SUB}
             multiline
             maxLength={200}
             onSubmitEditing={sendMessage}
@@ -295,7 +300,7 @@ export default function ChatbotScreen() {
             onPress={sendMessage}
             disabled={!inputText.trim()}
           >
-            <Ionicons name="send" size={20} color="#EFF6E0" />
+            <Ionicons name="send" size={20} color={C_TEXT} />
           </TouchableOpacity>
         </View>
       </View>
@@ -304,7 +309,7 @@ export default function ChatbotScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#01161E' },
+  container: { flex: 1, backgroundColor: C_BG },
 
   header: {
     flexDirection: 'row',
@@ -312,40 +317,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#124559',
+    borderBottomColor: C_BORDER,
   },
   botAvatar: {
     width: 44,
     height: 44,
-    borderRadius: 25,
-    backgroundColor: '#124559',
+    borderRadius: 22,
+    backgroundColor: C_CARD,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: C_BORDER,
   },
   headerText: { flex: 1 },
-  botName: { fontSize: 18, fontWeight: '700', color: '#EFF6E0', marginBottom: 2 },
-  botStatus: { fontSize: 14, color: '#30D158', fontWeight: '500' },
+  botName: { fontSize: 18, fontWeight: '800', color: C_TEXT, marginBottom: 2 },
+  // Make status purple
+  botStatus: { fontSize: 14, color: C_PURPLE, fontWeight: '800' },
 
-  /* Model toggle */
   modelToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: '#124559',
+    backgroundColor: C_CARD,
     borderWidth: 1,
-    borderColor: '#2A5A6A',
+    borderColor: C_BORDER,
   },
   modelToggleText: {
     maxWidth: 110,
-    color: '#EFF6E0',
+    color: C_TEXT,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
-  /* Dropdown */
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(1, 22, 30, 0.35)',
@@ -355,10 +361,10 @@ const styles = StyleSheet.create({
     top: 92,
     right: 16,
     width: 220,
-    backgroundColor: '#0B2430',
+    backgroundColor: C_CARD,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#124559',
+    borderColor: C_BORDER,
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -373,81 +379,97 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  dropdownItemActive: {
-    backgroundColor: 'rgba(48, 209, 88, 0.08)',
-  },
-  dropdownText: { color: '#EFF6E0', fontSize: 14, fontWeight: '500' },
-  dropdownTextActive: { color: '#30D158', fontWeight: '700' },
+  dropdownItemActive: { backgroundColor: C_PURPLE_TINT },
+  dropdownText: { color: C_TEXT, fontSize: 14, fontWeight: '600' },
+  dropdownTextActive: { color: C_PURPLE, fontWeight: '800' },
 
-  /* Messages */
   messagesContainer: { flex: 1 },
   messagesContent: { paddingVertical: 20, paddingHorizontal: 16 },
   messageContainer: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
   userMessageContainer: { justifyContent: 'flex-end' },
   botMessageContainer: { justifyContent: 'flex-start' },
+
   botMessageAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#124559',
+    backgroundColor: C_CARD,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: C_BORDER,
   },
   userMessageAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#EFF6E0',
+    backgroundColor: C_TEXT,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
   },
-  messageBubble: { maxWidth: width * 0.75, borderRadius: 20, overflow: 'hidden' },
-  userMessage: { backgroundColor: '#598392', paddingHorizontal: 16, paddingVertical: 12 },
-  botMessage: {},
-  botMessageGradient: { paddingHorizontal: 16, paddingVertical: 12 },
-  userMessageText: { fontSize: 16, color: '#EFF6E0', fontWeight: '500', lineHeight: 22 },
-  botMessageText: { fontSize: 16, color: '#EFF6E0', fontWeight: '500', lineHeight: 22 },
 
-  /* Input area */
+  messageBubble: {
+    maxWidth: width * 0.75,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C_BORDER,
+  },
+  userMessage: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  botMessage: { backgroundColor: C_CARD },
+  botMessageGradient: { paddingHorizontal: 16, paddingVertical: 12 },
+
+  userMessageText: { fontSize: 16, color: C_TEXT, fontWeight: '500', lineHeight: 22 },
+  botMessageText: { fontSize: 16, color: C_TEXT, fontWeight: '500', lineHeight: 22 },
+
   inputContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
-    // removed the blue divider line above the textbox:
-    borderTopWidth: 0,                 // <<< changed from 1 to 0
-    // borderTopColor removed
+    borderTopWidth: 0,         // remove tiny divider line above prompts
+    backgroundColor: C_BG,
   },
-  // prompts now appear ABOVE the textbox
-  quickQuestions: { paddingLeft: 4, marginBottom: 12 }, // add spacing above composer
+  quickQuestions: { paddingLeft: 4, marginBottom: 12 },
   quickQuestionButton: {
-    backgroundColor: '#124559',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#598392',
+    borderColor: C_BORDER,
   },
-  quickQuestionText: { fontSize: 12, color: '#AEC3B0', fontWeight: '500' },
+  quickQuestionText: { fontSize: 12, color: C_SUB, fontWeight: '600' },
 
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#124559',
-    borderRadius: 25,
-    paddingHorizontal: 16,
+    backgroundColor: C_CARD,
+    borderRadius: 22,
+    paddingHorizontal: 14,
     paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: C_BORDER,
   },
-  textInput: { flex: 1, fontSize: 16, color: '#EFF6E0', maxHeight: 100, paddingVertical: 8 },
+  textInput: { flex: 1, fontSize: 16, color: C_TEXT, maxHeight: 100, paddingVertical: 6 },
   sendButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#598392',
+    backgroundColor: C_PURPLE,      // brighter purple
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+    shadowColor: C_PURPLE,          // subtle glow to read as brighter
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
 });
