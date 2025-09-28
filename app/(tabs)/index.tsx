@@ -430,12 +430,12 @@ const RoomListView: React.FC<RoomListViewProps> = ({ selectedLeague, onBack, onR
       
       {/* Header */}
       <LinearGradient
-        colors={['rgba(1,22,30,0.8)', 'rgba(1,22,30,0.4)']}
+        colors={['rgba(1,22,30,0.8)', 'rgba(1,22,30,0.4)'] as [string, string]}
         style={roomListStyles.header}
       >
         <TouchableOpacity style={roomListStyles.backButton} onPress={handleBack}>
           <LinearGradient
-            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)'] as [string, string]}
             style={roomListStyles.backButtonContainer}
           >
             <Ionicons name="arrow-back" size={20} color="#ffffff" />
@@ -451,7 +451,7 @@ const RoomListView: React.FC<RoomListViewProps> = ({ selectedLeague, onBack, onR
       {/* League Header Card */}
       <View style={roomListStyles.leagueHeader}>
         <LinearGradient
-          colors={league?.gradient || ['#667eea', '#764ba2']}
+          colors={(league?.gradient || ['#667eea', '#764ba2']) as [string, string, ...string[]]}
           style={roomListStyles.leagueHeaderGradient}
         >
           <View style={roomListStyles.leagueInfo}>
@@ -486,9 +486,9 @@ const RoomListView: React.FC<RoomListViewProps> = ({ selectedLeague, onBack, onR
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={room.isLive 
+                colors={(room.isLive 
                   ? ['rgba(34, 197, 94, 0.2)', 'rgba(34, 197, 94, 0.05)']
-                  : ['rgba(107, 114, 128, 0.2)', 'rgba(107, 114, 128, 0.05)']}
+                  : ['rgba(107, 114, 128, 0.2)', 'rgba(107, 114, 128, 0.05)']) as [string, string]}
                 style={roomListStyles.roomCardGradient}
               >
                 <View style={roomListStyles.roomHeader}>
@@ -952,12 +952,12 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
       
       {/* Premium Header */}
       <LinearGradient
-        colors={['rgba(1,22,30,0.8)', 'rgba(1,22,30,0.4)']}
+        colors={['rgba(1,22,30,0.8)', 'rgba(1,22,30,0.4)'] as [string, string]}
         style={gameStyles.header}
       >
         <TouchableOpacity style={gameStyles.backButton} onPress={handleBack}>
           <LinearGradient
-            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)'] as [string, string]}
             style={gameStyles.backButtonContainer}
           >
             <Ionicons name="arrow-back" size={20} color="#ffffff" />
@@ -982,7 +982,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
         </View>
         <TouchableOpacity style={gameStyles.menuButton}>
           <LinearGradient
-            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+            colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)'] as [string, string]}
             style={gameStyles.menuButtonContainer}
           >
             <Ionicons name="ellipsis-vertical" size={16} color="#ffffff" />
@@ -1082,7 +1082,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
         <View style={gameStyles.contentContainer}>
           <Animated.View style={[gameStyles.tabContent, { transform: [{ scale: pulseAnim }] }]}>
             <LinearGradient
-              colors={['rgba(34, 197, 94, 0.2)', 'rgba(34, 197, 94, 0.1)']}
+              colors={['rgba(34, 197, 94, 0.2)', 'rgba(34, 197, 94, 0.1)'] as [string, string]}
               style={gameStyles.raisedCard}
             >
               <View style={gameStyles.raisedHeader}>
@@ -1120,9 +1120,9 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
                 ]}
               >
                 <LinearGradient
-                  colors={bet.status === 'closed' 
+                  colors={(bet.status === 'closed' 
                     ? ['rgba(34, 197, 94, 0.3)', 'rgba(34, 197, 94, 0.1)']
-                    : ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']}
+                    : ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']) as [string, string]}
                   style={gameStyles.betCardGradient}
                 >
                   <View style={gameStyles.betHeader}>
@@ -1163,7 +1163,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
 
       {/* Ultra Premium Bottom Panel */}
       <LinearGradient
-        colors={['rgba(1,22,30,0.3)', 'rgba(1,22,30,0.6)']}
+        colors={['rgba(1,22,30,0.3)', 'rgba(1,22,30,0.6)'] as [string, string]}
         style={gameStyles.bottomContainer}
       >
         <Animated.View 
@@ -1177,9 +1177,9 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
           ]}
         >
           <LinearGradient
-            colors={timeLeft <= 10 
+            colors={(timeLeft <= 10 
               ? ['rgba(239, 68, 68, 0.3)', 'rgba(239, 68, 68, 0.1)']
-              : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+              : ['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']) as [string, string]}
             style={gameStyles.timerGradient}
           >
             <View style={gameStyles.timerContainer}>
@@ -1201,7 +1201,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
         
         <View style={gameStyles.coinsCard}>
           <LinearGradient
-            colors={['rgba(255, 215, 0, 0.3)', 'rgba(255, 215, 0, 0.1)']}
+            colors={['rgba(255, 215, 0, 0.3)', 'rgba(255, 215, 0, 0.1)'] as [string, string]}
             style={gameStyles.coinsGradient}
           >
             <View style={gameStyles.coinsHeader}>
@@ -1237,7 +1237,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
             {...panResponder.panHandlers}
           >
             <LinearGradient
-              colors={['#1a1a2e', '#16213e', '#0f3460']}
+              colors={['#1a1a2e', '#16213e', '#0f3460'] as [string, string, string]}
               style={gameStyles.popupGradient}
             >
               {/* Beautiful Header */}
@@ -1268,7 +1268,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
                   activeOpacity={0.8}
                 >
                   <LinearGradient
-                    colors={['#667eea', '#764ba2']}
+                    colors={['#667eea', '#764ba2'] as [string, string]}
                     style={gameStyles.optionGradient}
                   >
                     <View style={gameStyles.optionContent}>
@@ -1292,7 +1292,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({ selectedLeague, selectedRoo
                   activeOpacity={0.8}
                 >
                   <LinearGradient
-                    colors={['#f093fb', '#f5576c']}
+                    colors={['#f093fb', '#f5576c'] as [string, string]}
                     style={gameStyles.optionGradient}
                   >
                     <View style={gameStyles.optionContent}>
@@ -1420,7 +1420,7 @@ export default function HomeScreen() {
                 activeOpacity={0.9}
               >
                 <LinearGradient
-                  colors={league.gradient as any}
+                  colors={league.gradient as [string, string, ...string[]]}
                   style={styles.cardGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
