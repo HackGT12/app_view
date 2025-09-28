@@ -1018,12 +1018,6 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
                   </LinearGradient>
                 </TouchableOpacity>
                 
-                <View style={styles.vsContainer}>
-                  <View style={styles.vsCircle}>
-                    <Text style={styles.vsText}>VS</Text>
-                  </View>
-                </View>
-                
                 <TouchableOpacity
                   style={styles.optionButton}
                   onPress={() => handleSwipe('right', currentMicroBet?.optionB || '')}
@@ -1450,7 +1444,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 28,
-    gap: 16,
+    gap: 20,
   },
   optionButton: {
     flex: 1,
