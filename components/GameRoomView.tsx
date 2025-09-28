@@ -333,6 +333,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
       
       if (docSnap.exists()) {
         const data = docSnap.data() as MicroBetData;
+        setLatestSponsor(data.sponsor || null);
         
         // ✅ normalize options
         let normalizedOptions: MicroBetOption[] = [];
@@ -418,6 +419,8 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
       const bets: MicroBetData[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as MicroBetData;
+        console.log("🎯 Sponsor for microbet:", data.sponsor);
+        setLatestSponsor(data.sponsor || null);
   
         // ✅ only keep bets for this game
         if (data.gameId !== selectedRoom.id) return;
@@ -831,7 +834,6 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
               </Text>
               <Text style={styles.raisedSubtext}>
                 +${Math.floor(totalRaised).toLocaleString()} this hour
-                {latestSponsor ? ` by ${latestSponsor}` : ""}
               </Text>
             </LinearGradient>
           </Animated.View>
@@ -1049,7 +1051,9 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
               <View style={styles.swipeInstructions}>
                 <View style={styles.instructionsContainer}>
                   <Ionicons name="swap-horizontal" size={20} color="#64748b" />
-                  <Text style={styles.instructionText}>Swipe left or right to bet</Text>
+                  <Text style={styles.instructionText}>
+                    {latestSponsor ? `Powered by ${latestSponsor}` : "Swipe left or right to bet"}
+                  </Text>
                 </View>
               </View>
             </LinearGradient>
