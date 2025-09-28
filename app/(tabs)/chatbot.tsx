@@ -119,7 +119,7 @@ export default function ChatbotScreen() {
   Here is the latest play-by-play feed (most recent first):
   ${recentPlays || "No live plays available yet."}
   
-  Answer questions using this live context and also explain betting concepts. 
+  Answer questions using this live context and also explain betting concepts. Keep answers concise (2–4 sentences max) unless the user asks for detail.
   Context for ${selectedModel}: ${getKnowledgeBase(selectedModel)}`,
         },
         { role: 'user', content: userMessage },
