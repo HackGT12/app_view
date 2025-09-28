@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { collection, getDocs, orderBy, query, where, doc, getDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { db } from "../firebaseConfig";
-import { FirebaseService } from "../utils/firebaseService";
+import { FirebaseService } from "@/utils/firebaseService";
 import LightningFlash from './LightningFlash';
 import ParticleEffect from './ParticleEffect';
 
@@ -98,9 +98,11 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
   const [previousMicroBets, setPreviousMicroBets] = useState<MicroBetData[]>([]);
   const [totalRaised, setTotalRaised] = useState(0);
   const [currentMicroBetId, setCurrentMicroBetId] = useState<string | null>(null);
+  const [latestSponsor, setLatestSponsor] = useState<string | null>(null);
   const [userVotes, setUserVotes] = useState<Record<string, string>>({});
-  const [rewardedBets, setRewardedBets] = useState<Set<string>>(new Set());
+  const [freshAnswers, setFreshAnswers] = useState<Record<string, string>>({});
   const [renderTrigger, setRenderTrigger] = useState(0);
+  const [rewardedBets, setRewardedBets] = useState<Set<string>>(new Set());
 
   const insets = useSafeAreaInsets();
 
@@ -331,6 +333,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
       
       if (docSnap.exists()) {
         const data = docSnap.data() as MicroBetData;
+        setLatestSponsor(data.sponsor || null);
         
         // ✅ normalize options
         let normalizedOptions: MicroBetOption[] = [];
@@ -416,6 +419,8 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
       const bets: MicroBetData[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as MicroBetData;
+        console.log("🎯 Sponsor for microbet:", data.sponsor);
+        setLatestSponsor(data.sponsor || null);
   
         // ✅ only keep bets for this game
         if (data.gameId !== selectedRoom.id) return;
@@ -440,6 +445,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
   
       if (bets.length > 0) {
         const latestBet = bets[bets.length - 1]; // 🆕 last one is most recent
+        setLatestSponsor(latestBet.sponsor || null);
   
         setCurrentMicroBet({
           question: latestBet.question,
@@ -575,9 +581,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
     }
   };
 
-  const [freshAnswers, setFreshAnswers] = useState<Record<string, string>>({});
-
-  const getBetResultStatus = (bet: MicroBetData) => {
+   const getBetResultStatus = (bet: MicroBetData) => {
     const userVote = userVotes[bet.id];
     const answer = freshAnswers[bet.id] || bet.answer;
     
@@ -1041,7 +1045,9 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
               <View style={styles.swipeInstructions}>
                 <View style={styles.instructionsContainer}>
                   <Ionicons name="swap-horizontal" size={20} color="#64748b" />
-                  <Text style={styles.instructionText}>Swipe left or right to bet</Text>
+                  <Text style={styles.instructionText}>
+                    {latestSponsor ? `Powered by ${latestSponsor}` : "Swipe left or right to bet"}
+                  </Text>
                 </View>
               </View>
             </LinearGradient>
