@@ -66,84 +66,41 @@ export default function ChatbotScreen() {
   const [showModelPicker, setShowModelPicker] = useState<boolean>(false);
   const [chatId] = useState<string>(() => Date.now().toString());
 
-  const [plays, setPlays] = useState<any[]>([]); // store live play data
-  const wsRef = useRef<WebSocket | null>(null);
-
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // --- connect WebSocket for live plays ---
-  // --- connect WebSocket for live plays ---
-  useEffect(() => {
-    const ws = new WebSocket('ws://10.136.7.78:8080'); // replace with your server IP
-    wsRef.current = ws;
-  
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'play') {
-          // ⬇️ keep the entire JSON payload, not just slices
-          setPlays((prev) => [...prev.slice(-9), data]);
-        }
-      } catch (err) {
-        console.error("❌ Error parsing WS message", err);
-      }
-    };
-  
-    return () => {
-      ws.close();
-    };
-  }, []);
-  
   const generateResponse = async (userMessage: string): Promise<string> => {
-    // Turn last 5–10 plays into readable context
-    const recentPlays = plays
-    .map((p, i) => {
-      const clock = p.payload?.clock ?? "—";
-      const desc = p.payload?.description ?? "No description available";
-      const home = p.homeTeamName ?? "Home";
-      const away = p.awayTeamName ?? "Away";
-      const homeScore = p.homeTeamScore ?? p.payload?.home_points ?? 0;
-      const awayScore = p.awayTeamScore ?? p.payload?.away_points ?? 0;
-  
-      return `${i + 1}. [${clock}] ${desc} | ${home} ${homeScore} - ${away} ${awayScore}`;
-    })
-    .join("\n");
-  
-  
-    const requestBody = {
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a helpful sports betting guide. 
-  Here is the latest play-by-play feed (most recent first):
-  ${recentPlays || "No live plays available yet."}
-  
-  Answer questions using this live context and also explain betting concepts. Keep answers concise (2–4 sentences max) unless the user asks for detail.
-  Context for ${selectedModel}: ${getKnowledgeBase(selectedModel)}`,
-        },
-        { role: 'user', content: userMessage },
-      ],
-      max_tokens: 200,
-    };
-  
     try {
+      const requestBody = {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a helpful side guide for a charity betting app. Keep responses concise and friendly. Context for ${selectedModel}: ${getKnowledgeBase(selectedModel)}`
+          },
+          { role: 'user', content: userMessage }
+        ],
+        max_tokens: 150,
+      };
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
         },
         body: JSON.stringify(requestBody),
       });
+
       const data = await response.json();
-      return data.choices?.[0]?.message?.content || 'Sorry, I’m not sure what just happened.';
-    } catch (err) {
-      console.error('❌ OpenAI error', err);
-      return 'Error contacting AI service.';
+      if (!response.ok) {
+        return `API Error: ${data.error?.message || 'Unknown error'}`;
+      }
+      return data.choices?.[0]?.message?.content || 'Sorry, I had trouble understanding that.';
+    } catch (error) {
+      return 'Sorry, I\'m having trouble connecting right now. Please try again later.';
     }
   };
-  
+
   const sendMessage = async () => {
     if (!inputText.trim()) return;
 
@@ -159,7 +116,6 @@ export default function ChatbotScreen() {
     setInputText('');
 
     const responseText = await generateResponse(textForResponse);
-
     const botResponse: Message = {
       id: (Date.now() + 1).toString(),
       text: responseText,
@@ -171,7 +127,6 @@ export default function ChatbotScreen() {
   };
 
   useEffect(() => {
-    // Auto-scroll to bottom when new messages arrive
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
@@ -184,7 +139,7 @@ export default function ChatbotScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top + 60 }]}
+      style={[styles.container, { paddingTop: insets.top + 20 }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
@@ -197,7 +152,7 @@ export default function ChatbotScreen() {
           <Text style={styles.botStatus}>Online • {selectedModel}</Text>
         </View>
 
-        {/* Model Toggle */}
+        {/* Model Toggle (top-right) */}
         <TouchableOpacity
           style={styles.modelToggle}
           onPress={() => setShowModelPicker((s) => !s)}
@@ -216,7 +171,7 @@ export default function ChatbotScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown Menu + Overlay */}
       {showModelPicker && (
         <>
           <TouchableOpacity
@@ -238,9 +193,7 @@ export default function ChatbotScreen() {
                     style={[styles.dropdownItem, active && styles.dropdownItemActive]}
                     onPress={() => handleSelectModel(opt)}
                   >
-                    <Text
-                      style={[styles.dropdownText, active && styles.dropdownTextActive]}
-                    >
+                    <Text style={[styles.dropdownText, active && styles.dropdownTextActive]}>
                       {opt}
                     </Text>
                     {active && <Ionicons name="checkmark" size={16} color="#30D158" />}
@@ -304,6 +257,27 @@ export default function ChatbotScreen() {
 
       {/* Input */}
       <View style={styles.inputContainer}>
+        {/* >>> moved prompts ABOVE the textbox <<< */}
+        <View style={styles.quickQuestions}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {[
+              'How does betting work?',
+              'What are coins for?',
+              'How does charity work?',
+              'Betting rules?',
+            ].map((question, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.quickQuestionButton}
+                onPress={() => setInputText(question)}
+              >
+                <Text style={styles.quickQuestionText}>{question}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* composer */}
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.textInput}
@@ -324,25 +298,6 @@ export default function ChatbotScreen() {
             <Ionicons name="send" size={20} color="#EFF6E0" />
           </TouchableOpacity>
         </View>
-
-        <View style={styles.quickQuestions}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {[
-              'How does betting work?',
-              'What are coins for?',
-              'How does charity work?',
-              'Betting rules?',
-            ].map((question, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.quickQuestionButton}
-                onPress={() => setInputText(question)}
-              >
-                <Text style={styles.quickQuestionText}>{question}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -355,13 +310,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#124559',
   },
   botAvatar: {
-    width: 50,
-    height: 50,
+    width: 44,
+    height: 44,
     borderRadius: 25,
     backgroundColor: '#124559',
     alignItems: 'center',
@@ -372,6 +327,7 @@ const styles = StyleSheet.create({
   botName: { fontSize: 18, fontWeight: '700', color: '#EFF6E0', marginBottom: 2 },
   botStatus: { fontSize: 14, color: '#30D158', fontWeight: '500' },
 
+  /* Model toggle */
   modelToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -389,13 +345,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  /* Dropdown */
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(1, 22, 30, 0.35)',
   },
   dropdown: {
     position: 'absolute',
-    top: 108,
+    top: 92,
     right: 16,
     width: 220,
     backgroundColor: '#0B2430',
@@ -422,6 +379,7 @@ const styles = StyleSheet.create({
   dropdownText: { color: '#EFF6E0', fontSize: 14, fontWeight: '500' },
   dropdownTextActive: { color: '#30D158', fontWeight: '700' },
 
+  /* Messages */
   messagesContainer: { flex: 1 },
   messagesContent: { paddingVertical: 20, paddingHorizontal: 16 },
   messageContainer: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
@@ -452,13 +410,28 @@ const styles = StyleSheet.create({
   userMessageText: { fontSize: 16, color: '#EFF6E0', fontWeight: '500', lineHeight: 22 },
   botMessageText: { fontSize: 16, color: '#EFF6E0', fontWeight: '500', lineHeight: 22 },
 
+  /* Input area */
   inputContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#124559',
+    // removed the blue divider line above the textbox:
+    borderTopWidth: 0,                 // <<< changed from 1 to 0
+    // borderTopColor removed
   },
+  // prompts now appear ABOVE the textbox
+  quickQuestions: { paddingLeft: 4, marginBottom: 12 }, // add spacing above composer
+  quickQuestionButton: {
+    backgroundColor: '#124559',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#598392',
+  },
+  quickQuestionText: { fontSize: 12, color: '#AEC3B0', fontWeight: '500' },
+
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -466,7 +439,6 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    marginBottom: 12,
   },
   textInput: { flex: 1, fontSize: 16, color: '#EFF6E0', maxHeight: 100, paddingVertical: 8 },
   sendButton: {
@@ -478,16 +450,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: 8,
   },
-
-  quickQuestions: { paddingLeft: 4 },
-  quickQuestionButton: {
-    backgroundColor: '#124559',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#598392',
-  },
-  quickQuestionText: { fontSize: 12, color: '#AEC3B0', fontWeight: '500' },
 });

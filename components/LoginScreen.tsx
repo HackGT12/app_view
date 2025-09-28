@@ -9,8 +9,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -28,23 +26,13 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      let res: any;
       if (isSignUp) {
         await signUp(email, password, name);
       } else {
-        res = await signIn(email, password);
+        await signIn(email, password);
       }
-
-      if (res?.user?.uid) {
-        // ✅ Save before navigation
-        await AsyncStorage.setItem(
-          'user',
-          JSON.stringify({ uid: res.user.uid, email: res.user.email })
-        );
-
-        // ✅ Now redirect
-        router.replace('/');
-      }
+      // Firebase Auth will handle persistence automatically
+      // AuthContext will redirect when user state changes
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {

@@ -42,7 +42,7 @@ export default function Testing() {
       if (docSnap.exists()) {
         const data = docSnap.data() as MicroBetData;
   
-        // 🔑 Ensure options is always an array
+        // Ensure options is always an array
         let normalizedOptions: MicroBetOption[] = [];
         if (Array.isArray(data.options)) {
           normalizedOptions = data.options;
@@ -163,7 +163,7 @@ export default function Testing() {
   const scheduleReconnect = () => {
     if (!reconnectTimer.current) {
       reconnectTimer.current = setTimeout(() => {
-        console.log('🔄 Attempting to reconnect...');
+        console.log('Attempting to reconnect...');
         connectWebSocket();
       }, 5000); // retry after 5s
     }
