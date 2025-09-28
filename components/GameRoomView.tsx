@@ -98,9 +98,11 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
   const [previousMicroBets, setPreviousMicroBets] = useState<MicroBetData[]>([]);
   const [totalRaised, setTotalRaised] = useState(0);
   const [currentMicroBetId, setCurrentMicroBetId] = useState<string | null>(null);
+  const [latestSponsor, setLatestSponsor] = useState<string | null>(null);
   const [userVotes, setUserVotes] = useState<Record<string, string>>({});
-  const [rewardedBets, setRewardedBets] = useState<Set<string>>(new Set());
+  const [freshAnswers, setFreshAnswers] = useState<Record<string, string>>({});
   const [renderTrigger, setRenderTrigger] = useState(0);
+  const [rewardedBets, setRewardedBets] = useState<Set<string>>(new Set());
 
   const insets = useSafeAreaInsets();
 
@@ -440,6 +442,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
   
       if (bets.length > 0) {
         const latestBet = bets[bets.length - 1]; // 🆕 last one is most recent
+        setLatestSponsor(latestBet.sponsor || null);
   
         setCurrentMicroBet({
           question: latestBet.question,
@@ -575,9 +578,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
     }
   };
 
-  const [freshAnswers, setFreshAnswers] = useState<Record<string, string>>({});
-
-  const getBetResultStatus = (bet: MicroBetData) => {
+   const getBetResultStatus = (bet: MicroBetData) => {
     const userVote = userVotes[bet.id];
     const answer = freshAnswers[bet.id] || bet.answer;
     
@@ -830,6 +831,7 @@ const GameRoomView: React.FC<GameRoomViewProps> = ({
               </Text>
               <Text style={styles.raisedSubtext}>
                 +${Math.floor(totalRaised).toLocaleString()} this hour
+                {latestSponsor ? ` by ${latestSponsor}` : ""}
               </Text>
             </LinearGradient>
           </Animated.View>

@@ -48,7 +48,15 @@ export interface Reward {
 }
 
 export class FirebaseService {
-  // Get user data including coins
+  private static sponsors = ["Nike", "Adidas", "New Balance"];
+  private static sponsorIndex = 0;
+
+  private static getNextSponsor(): string {
+    const sponsor = this.sponsors[this.sponsorIndex];
+    this.sponsorIndex = (this.sponsorIndex + 1) % this.sponsors.length; // cycle
+    return sponsor;
+  }
+
   static async getUserData(userId: string): Promise<UserData | null> {
     try {
       const userRef = doc(db, 'users', userId);
@@ -239,8 +247,13 @@ export class FirebaseService {
     return streak;
   }
 
-  // Create a new group bet (saves to groupLines collection)
-  static async createGroupBet(question: string, minRange: number, maxRange: number, createdBy: string): Promise<string | null> {
+  // Create a new group bet (saves to microBets collection)
+  static async createGroupBet(
+    question: string, 
+    minRange: number, 
+    maxRange: number, 
+    createdBy: string
+  ): Promise<string | null> {
     try {
       const groupLine = {
         question,
@@ -248,21 +261,22 @@ export class FirebaseService {
         max: maxRange,
         active: true,
         createdBy,
-        createdAt: new Date()
+        createdAt: new Date(),
+        sponsor: this.getNextSponsor(),   // 👈 NEW sponsor assignment
       };
 
-      const docRef = doc(collection(db, 'microBets'));
+      const docRef = doc(collection(db, "microBets"));
       await setDoc(docRef, {
         ...groupLine,
-        gameId: "default",  // 👈 tie bet to a game
+        gameId: "default", // 👈 tie bet to a game (adjust as needed)
       });
       return docRef.id;
     } catch (error) {
-      console.error('Error creating group bet:', error);
+      console.error("Error creating group bet:", error);
       return null;
     }
   }
-
+  
   // Set the actual answer for a group line (creator only)
   static async setGroupLineAnswer(lineId: string, actual: number, userId: string): Promise<boolean> {
     try {
