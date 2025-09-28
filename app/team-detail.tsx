@@ -574,7 +574,7 @@ export default function TeamDetail() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#124559',
+    backgroundColor: '#0a1327ff',
   },
   header: {
     flexDirection: 'row',
